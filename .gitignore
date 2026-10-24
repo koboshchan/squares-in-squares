@@ -10,3 +10,6 @@ submission*.csv
 *.log
 .env
 secrets/
+
+# local scratch
+scratch/
