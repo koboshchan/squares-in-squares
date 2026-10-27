@@ -1,0 +1,13 @@
+The file src/squares/_official_metric.py is the unmodified Python code cell
+from the Kaggle Competition Metrics notebook Squares in Squares, version 20
+(kernel version 362888901), retrieved October 27, 2026.
+
+Source https://www.kaggle.com/code/metric/squares-in-squares
+Owner Kaggle Competition Metrics; editor inversion
+Upstream license Apache License 2.0
+License text is included in vendor/LICENSE-APACHE-2.0.
+
+SHA256 760b7a8fca1cba90579b8fcab6318bec0e1a438dfc31fa424673676e0bb559eb
+
+No claim of ownership of the upstream metric or referenced packing records.
+The metric is a snapshot, not an automatically updated dependency.

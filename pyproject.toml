@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "squares-in-squares"
+version = "0.1.0"
+description = "Official-metric-validated unit-square packing tools"
+requires-python = ">=3.12"
+dependencies = ["mpmath==1.4.1", "pandas>=2.2,<4"]
+
+[project.optional-dependencies]
+optimize = ["numpy>=2,<3", "scipy>=1.15,<2"]
+dev = ["pytest>=8,<10", "build>=1.2"]
+
+[project.scripts]
+squares = "squares.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

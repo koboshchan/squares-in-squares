@@ -1,0 +1,4 @@
+include vendor/NOTICE
+include vendor/LICENSE-APACHE-2.0
+include examples/records.json
+include README.md
