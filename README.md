@@ -56,3 +56,5 @@ The strict validate command exits unsuccessfully on any rejected submitted packi
 Application code lives in src/squares. core.py owns decimal-preserving CSV IO and certification gates, optimizer.py contains the heuristic, references.py implements the offline record adapter, and cli.py exposes the commands. The upstream metric lives in _official_metric.py and should only change with a documented notebook-version update. mpmath is pinned to 1.4.1 because the snapshot's 50-decimal formatter uses that release's public mpf mantissa and exponent properties.
 
 Run pytest -q for contact precision, exact-grid, malformed-input, fallback-score, official-entrypoint parity, reference, merge, optimizer and atomic-write coverage. Run python -m build for distributable wheels and source archives. Generated CSVs, reports, virtual environments and credentials do not belong in commits. A wheel includes the upstream metric attribution and license text.
+
+Project code is MIT licensed under [LICENSE](LICENSE). The bundled Kaggle metric remains Apache 2.0 licensed, with its separate attribution and license retained in vendor/.
