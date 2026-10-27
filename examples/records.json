@@ -1,0 +1,10 @@
+{
+  "records": [
+    {
+      "n": 1,
+      "source": "https://erich-friedman.github.io/packing/index.html",
+      "attribution": "Trivial unit-square grid, included as an adapter-format example, not a new record.",
+      "squares": [{"x": "0.5", "y": "0.5", "angle": "0"}]
+    }
+  ]
+}
