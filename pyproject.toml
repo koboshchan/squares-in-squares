@@ -16,6 +16,9 @@ dev = ["pytest>=8,<10", "build>=1.2"]
 [project.scripts]
 squares = "squares.cli:main"
 
+[tool.setuptools.data-files]
+"share/squares-in-squares" = ["vendor/NOTICE", "vendor/LICENSE-APACHE-2.0"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
