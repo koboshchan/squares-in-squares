@@ -42,3 +42,28 @@ records.py imports linked SVG geometry from https://kingbird.myphotos.cc/packing
 Every accepted candidate goes through the unchanged official v20 interval certifier in squares.core.certify. Float64 SAT is a diagnostic, not a substitute. Preliminary 1e-8 classification is not overlap allowance; interval contacts escalate through 50,100,200,500 digits and unresolved cases fail. Any safety dilation contributes to measured L. Perfect-square grids remain exact. Imported records do not earn GPU credit. A complete CSV has 500,500 rows plus header id,n,square_id,x,y,angle, consecutive global IDs, local IDs 0..n-1 and decimal-string coordinates. Lower total sum(L/sqrt(n)-1) is better.
 
 The local current CSV is outputs/records/merged/submission.csv, SHA256 5d321184da9ebf7239acf8701f608694bd0fe3b856c92033652473aa8d3b222f. It is intentionally not bundled in Git. Saved small raw candidates remain under results/ and can be recertified with demo.py report; its regenerated gpu-certified.csv is ignored. No tool automatically submits to Kaggle, rents a GPU or launches an unbounded service.
+
+### Endless 4070S passes
+
+Double-click `cuda/endless-4070s.bat` on the desktop checkout, or run
+`python cuda/endless.py --directory outputs/full-4070s --incumbent inputs/incumbent-safe.csv`
+from the repo root under Linux/WSL. Install the project dependencies first.
+
+The supervisor watches an existing seed-42 full_run process without signalling it.
+It shows tqdm progress, current n, per-pass wins, and the sum of certified
+per-n score contributions recomputed from best/*.json. The initial CSV is
+independently verified while seed 42 keeps running. After that pass exits,
+all 1000 puzzles must pass C++ literal and numeric-roundtrip certification
+and both Python official metric paths before best-so-far.csv is atomically
+replaced. Subsequent passes reuse the per-n bests, use seeds 43,44,...,
+and require strictly smaller literal and roundtrip lengths for replacements.
+
+endless.json persists pass, seed, and transition phase. state.json persists
+completed cases and the active n. live.json is a small machine-readable status.
+Each completed pass is archived under passes/ with its CSV, state, and score;
+score-per-pass.json is rebuilt idempotently. An OS file lock prevents duplicate
+supervisors and /proc process detection prevents duplicate workers. On reboot,
+double-click the batch file to resume the unfinished pass. No automatic startup
+is installed. If a worker or final certification fails, the supervisor exits
+with an error instead of skipping a pass or replacing the known-good CSV.
+The supervisor never submits to Kaggle.

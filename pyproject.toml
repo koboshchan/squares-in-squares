@@ -7,7 +7,7 @@ name = "squares-in-squares"
 version = "0.1.0"
 description = "Official-metric-validated unit-square packing tools"
 requires-python = ">=3.12"
-dependencies = ["mpmath==1.4.1", "pandas>=2.2,<4"]
+dependencies = ["mpmath==1.4.1", "pandas>=2.2,<4", "tqdm>=4.67,<5"]
 
 [project.optional-dependencies]
 optimize = ["numpy>=2,<3", "scipy>=1.15,<2"]
