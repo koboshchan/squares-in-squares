@@ -22,4 +22,5 @@ cuda/selftest
 cuda/seeded
 cuda/globaltest
 cuda/seeded_test
+cuda/certifier
 cuda/results/gpu-certified.csv

@@ -16,7 +16,7 @@ def digest(path):
     with Path(path).open("rb") as stream:
         return hashlib.file_digest(stream,"sha256").hexdigest()
 
-def rank_targets(state, targets, max_n=128):
+def rank_targets(state, targets, max_n=1000):
     """Potential score decrease, not time-normalized invented performance."""
     rows=[]
     for n, target in targets.items():
@@ -29,7 +29,7 @@ def rank_targets(state, targets, max_n=128):
 
 def write_seed(path, rows, provenance, dilation=1.00000002):
     n=len(rows);side=certify(n,rows)
-    if not 1<=n<=384 or not math.isfinite(dilation) or not 1<=dilation<=1.001:
+    if not 1<=n<=1000 or not math.isfinite(dilation) or not 1<=dilation<=1.001:
         raise ValueError("invalid seeded search input")
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
     path.write_text(f"{n} {float(side)*dilation:.17g}\n"+"".join(

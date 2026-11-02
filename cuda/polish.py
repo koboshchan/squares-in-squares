@@ -74,17 +74,37 @@ def polish(q, maxiter=400):
     q[:,:2] -= lo
     L = float((q[:,:2]+extent[:,None]).max())
     z = np.r_[q.ravel(), L+1e-6]
+    best_z = z.copy()
+    best_L = float(z[-1])
+    def track_constraints(x):
+        nonlocal best_z, best_L
+        c = constraints(x, n)
+        if np.isfinite(x).all() and c.min() >= -1e-7 and float(x[-1]) <= best_L:
+            best_z = x.copy()
+            best_L = float(x[-1])
+        return c
     grad = np.zeros_like(z); grad[-1] = 1
     result = minimize(lambda x:x[-1], z, jac=lambda x:grad,
                       method="SLSQP", constraints=[dict(type="ineq",
-                      fun=lambda x:constraints(x,n),
+                      fun=track_constraints,
                       jac=lambda x:constraints(x,n,True))],
                       bounds=[(-2,34),(-2,34),(-100,100)]*n+[(np.sqrt(n),34)],
                       options=dict(maxiter=maxiter, ftol=1e-12))
-    rows, side, dilation = certify_q(result.x[:-1].reshape(n,3))
+    candidates = [result.x, best_z, z]
+    best_out = None
+    for cand_x in candidates:
+        try:
+            rows, side, dilation = certify_q(cand_x[:-1].reshape(n,3))
+            if best_out is None or side < best_out[1]:
+                best_out = (rows, side, dilation, cand_x)
+        except ValueError:
+            pass
+    if best_out is None:
+        raise ValueError("official interval certification failed")
+    rows, side, dilation, chosen_x = best_out
     return rows, dict(n=n, L=side, dilation=dilation, iterations=int(result.nit),
                       converged=bool(result.success), message=str(result.message),
-                      min_constraint=float(constraints(result.x,n).min()))
+                      min_constraint=float(constraints(chosen_x,n).min()))
 
 def main():
     p=argparse.ArgumentParser()
