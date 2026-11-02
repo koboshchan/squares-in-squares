@@ -9,7 +9,13 @@
 #include <vector>
 #include <chrono>
 #define CK(x) do { auto e=(x); if(e!=cudaSuccess){std::cerr<<cudaGetErrorString(e)<<"\n";exit(2);} }while(0)
-constexpr int NMAX=50, NT=64, CELLS=256, LADDER=8;
+#ifndef PACK_THREADS
+#define PACK_THREADS 64
+#endif
+constexpr int NMAX=50, NT=PACK_THREADS, CELLS=256, LADDER=8;
+static_assert(NT==32||NT==64||NT==128||NT==256,"power-of-two thread count");
+struct Settings {float tmin,tmax,move,rotation;};
+__constant__ Settings settings;
 struct Q {float x,y,a;};
 __device__ int cell(Q p) {
  int x=max(0,min(15,(int)floorf(p.x/2))), y=max(0,min(15,(int)floorf(p.y/2)));
@@ -49,7 +55,7 @@ __global__ void walk(Q* all,float* energies,curandStatePhilox4_32_10_t* rng,
  int t=threadIdx.x,b=blockIdx.x;
  auto r=rng[b*NT+t]; unsigned long long count=0;
  if(t<n)q[t]=all[b*n+t]; __syncthreads();
- float temp=1e-7f*powf(100000.f,(b%LADDER)/float(LADDER-1))*cooling;
+ float temp=settings.tmin*powf(settings.tmax/settings.tmin,(b%LADDER)/float(LADDER-1))*cooling;
  for(int step=0;step<steps;step++){
   for(int j=t;j<CELLS;j+=NT)head[j]=-1;
   if(t==0)offset=curand(&r)%n; __syncthreads();
@@ -65,9 +71,9 @@ __global__ void walk(Q* all,float* energies,curandStatePhilox4_32_10_t* rng,
    selected[t]=take;
    proposed[t]=q[t];
    if(take){
-    float scale=(step%8==0?.12f:.015f)*sqrtf(cooling);
+    float scale=(step%8==0?.12f:settings.move)*sqrtf(cooling);
     Q p=q[t];p.x+=scale*(2*curand_uniform(&r)-1);p.y+=scale*(2*curand_uniform(&r)-1);
-    p.a+=scale*(2*curand_uniform(&r)-1);p.a=remainderf(p.a,1.57079632679f);
+    p.a+=(step%8==0?settings.rotation:scale)*(2*curand_uniform(&r)-1);p.a=remainderf(p.a,1.57079632679f);
     float delta=local(p,t,q,head,next,L)-local(q[t],t,q,head,next,L);
     if(delta<=0||curand_uniform(&r)<expf(-delta/temp))proposed[t]=p;
     count++;
@@ -85,23 +91,72 @@ __global__ void walk(Q* all,float* energies,curandStatePhilox4_32_10_t* rng,
  if(t==0)energies[b]=sum[0];
  rng[b*NT+t]=r; atomicAdd(counts,count);
 }
+
+// Large-n path: immutable global snapshot, pair-parallel single-square moves.
+// No n-sized shared allocation. All reads finish before the sole coordinate write.
+__global__ void walk_global(Q* all,float* energies,curandStatePhilox4_32_10_t* rng,
+                           int n,float L,int steps,float cooling,unsigned long long* counts){
+ __shared__ Q oldp,proposal;
+ __shared__ int chosen,accept;
+ __shared__ float partial[NT];
+ int t=threadIdx.x,b=blockIdx.x; Q* q=all+b*n;
+ auto r=rng[b*NT+t];
+ float temp=settings.tmin*powf(settings.tmax/settings.tmin,(b%LADDER)/float(LADDER-1))*cooling;
+ for(int step=0;step<steps;step++){
+  if(t==0){
+   chosen=curand(&r)%n;oldp=q[chosen];proposal=oldp;
+   float scale=(step%8==0?.12f:settings.move)*sqrtf(cooling);
+   proposal.x+=scale*(2*curand_uniform(&r)-1);
+   proposal.y+=scale*(2*curand_uniform(&r)-1);
+   proposal.a=remainderf(proposal.a+scale*(2*curand_uniform(&r)-1),1.57079632679f);
+  } __syncthreads();
+  float delta=t==0?wall(proposal,L)-wall(oldp,L):0;
+  for(int j=t;j<n;j+=NT)if(j!=chosen){
+   float dx=q[j].x-oldp.x,dy=q[j].y-oldp.y;
+   if(dx*dx+dy*dy>9)continue;
+   float a=depth(proposal,q[j]),c=depth(oldp,q[j]);delta+=a*a-c*c;
+  }
+  partial[t]=delta;__syncthreads();
+  for(int stride=NT/2;stride;stride/=2){if(t<stride)partial[t]+=partial[t+stride];__syncthreads();}
+  if(t==0){accept=partial[0]<=0||curand_uniform(&r)<expf(-partial[0]/temp);}
+  __syncthreads();
+  if(t==0&&accept)q[chosen]=proposal;
+  __syncthreads();
+ }
+ float e=0;
+ for(int i=t;i<n;i+=NT){
+  e+=wall(q[i],L);
+  for(int j=i+1;j<n;j++){
+   float dx=q[j].x-q[i].x,dy=q[j].y-q[i].y;
+   if(dx*dx+dy*dy<=2.000001f){float a=depth(q[i],q[j]);e+=a*a;}
+  }
+ }
+ partial[t]=e;__syncthreads();
+ for(int stride=NT/2;stride;stride/=2){if(t<stride)partial[t]+=partial[t+stride];__syncthreads();}
+ if(t==0){energies[b]=partial[0];atomicAdd(counts,(unsigned long long)steps);}
+ rng[b*NT+t]=r;
+}
 __global__ void exchange(Q* q,float* e,curandStatePhilox4_32_10_t* rng,int n,int chains,int parity,float cooling){
  int a=blockIdx.x*2+parity,b=a+1;
  if(b>=chains||a/LADDER!=b/LADDER)return;
  __shared__ int accept;
  if(threadIdx.x==0){
-  auto r=rng[a*NT];float ta=1e-7f*powf(100000.f,(a%LADDER)/float(LADDER-1))*cooling;
-  float tb=1e-7f*powf(100000.f,(b%LADDER)/float(LADDER-1))*cooling;
+  auto r=rng[a*NT];float ta=settings.tmin*powf(settings.tmax/settings.tmin,(a%LADDER)/float(LADDER-1))*cooling;
+  float tb=settings.tmin*powf(settings.tmax/settings.tmin,(b%LADDER)/float(LADDER-1))*cooling;
   accept=logf(curand_uniform(&r))<(1/ta-1/tb)*(e[a]-e[b]);
   rng[a*NT]=r;if(accept){float z=e[a];e[a]=e[b];e[b]=z;}
  } __syncthreads();
- if(accept&&threadIdx.x<n){int i=threadIdx.x;Q z=q[a*n+i];q[a*n+i]=q[b*n+i];q[b*n+i]=z;}
+ if(accept)for(int i=threadIdx.x;i<n;i+=NT){Q z=q[a*n+i];q[a*n+i]=q[b*n+i];q[b*n+i]=z;}
+}
+float envf(const char* name,float fallback,float low,float high){
+ const char* s=getenv(name);if(!s)return fallback;
+ char* end;float v=strtof(s,&end);if(*end||!std::isfinite(v)||v<low||v>high){std::cerr<<"invalid "<<name<<"\n";exit(2);}return v;
 }
 int main(int argc,char**argv){
  if(argc!=7){std::cerr<<"packing seed.txt epochs steps chains random_seed output.json\n";return 2;}
  int epochs=atoi(argv[2]),steps=atoi(argv[3]),chains=atoi(argv[4]),n;
  if(epochs<1||epochs>100000||steps<1||steps>4096||chains<8||chains>4096||chains%8)return 2;
- std::ifstream in(argv[1]);float L=0;n=0;if(!(in>>n>>L))return 2;if(n<1||n>NMAX||!std::isfinite(L)||L<=0||L>16)return 2;
+ std::ifstream in(argv[1]);float L=0;n=0;if(!(in>>n>>L))return 2;if(n<1||n>1000||!std::isfinite(L)||L<=0||L>64)return 2;
  std::vector<Q> seed(n);for(auto& p:seed){in>>p.x>>p.y>>p.a;if(!in||!std::isfinite(p.x)||!std::isfinite(p.y)||!std::isfinite(p.a))return 2;}
  std::vector<Q> h(n*chains),best;std::vector<float> energy(chains);float bestL=L;
  for(int b=0;b<chains;b++)for(int i=0;i<n;i++)h[b*n+i]=seed[i];
@@ -110,17 +165,27 @@ int main(int argc,char**argv){
  CK(cudaMalloc(&rng,chains*NT*sizeof(*rng)));CK(cudaMalloc(&counts,sizeof(*counts)));
  CK(cudaMemset(counts,0,sizeof(*counts)));CK(cudaMemcpy(d,h.data(),h.size()*sizeof(Q),cudaMemcpyHostToDevice));
  init_rng<<<(chains*NT+255)/256,256>>>(rng,chains,strtoull(argv[5],nullptr,10));CK(cudaGetLastError());CK(cudaDeviceSynchronize());
+ Settings config{envf("PACK_TMIN",1e-7f,1e-12f,1.f),envf("PACK_TMAX",.01f,1e-12f,1.f),
+                 envf("PACK_MOVE",.015f,.000001f,.12f),envf("PACK_ROTATION",.12f,.000001f,1.57f)};
+ if(config.tmax<config.tmin)return 2;
+ CK(cudaMemcpyToSymbol(settings,&config,sizeof(config)));
+ float shrinkStep=envf("PACK_SHRINK",.002f,.000001f,.1f);
  auto start=std::chrono::steady_clock::now();int feasible=0,shrink=0;
  for(int epoch=0;epoch<epochs;epoch++){
   float cool=powf(.05f,float(epoch%100)/100);
-  walk<<<chains,NT>>>(d,de,rng,n,L,steps,cool,counts);CK(cudaGetLastError());
+  if(n<=NMAX&&n<=NT)walk<<<chains,NT>>>(d,de,rng,n,L,steps,cool,counts);
+  else walk_global<<<chains,NT>>>(d,de,rng,n,L,steps,cool,counts);
+  CK(cudaGetLastError());
   CK(cudaMemcpy(energy.data(),de,chains*sizeof(float),cudaMemcpyDeviceToHost));
   int winner=-1;for(int b=0;b<chains;b++)if(energy[b]==0){winner=b;break;}
   if(winner>=0){
    best.resize(n);CK(cudaMemcpy(best.data(),d+winner*n,n*sizeof(Q),cudaMemcpyDeviceToHost));bestL=L;feasible++;
    // Common fixed L across ladder is necessary for valid replica exchange.
-   float newL=fmaxf(sqrtf(float(n)),L-.002f);if(newL<L){
-    for(int b=0;b<chains;b++)for(int i=0;i<n;i++){Q p=best[i];p.x*=newL/L;p.y*=newL/L;h[b*n+i]=p;}
+   float newL=fmaxf(sqrtf(float(n)),L-shrinkStep);if(newL<L){
+    CK(cudaMemcpy(h.data(),d,h.size()*sizeof(Q),cudaMemcpyDeviceToHost));
+    for(int b=0;b<chains;b++)for(int i=0;i<n;i++){
+     Q p=b%LADDER==0?best[i]:h[b*n+i];p.x*=newL/L;p.y*=newL/L;h[b*n+i]=p;
+    }
     L=newL;shrink++;CK(cudaMemcpy(d,h.data(),h.size()*sizeof(Q),cudaMemcpyHostToDevice));
    }
   } else {exchange<<<(chains+1)/2,NT>>>(d,de,rng,n,chains,epoch%2,cool);CK(cudaGetLastError());}
