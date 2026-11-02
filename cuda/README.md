@@ -77,3 +77,69 @@ compute-sanitizer --tool racecheck --error-exitcode 3 \
 ## Limits and next experiments
 
 This implementation favors transparent correctness over maximum throughput. The 16x16 direct grid, n<=50 storage, conservative proposal exclusion, repeated all-chain reseeding, fixed shrink amount and random-walk moves are deliberate POC limits. Longer runs and more chains are not guaranteed to improve results. n=50 stalls at its grid seed. Incremental neighbor maintenance, multiple retained feasible states, adaptive move scales and a GPU/CPU local-polish stage are possible next experiments, not implemented features.
+
+Quality-first continuation
+--------------------------
+
+The search remains heuristic. No promise of matching every record is made.
+`polish.py` uses float64 SLSQP with an analytic separating-axis Jacobian,
+then accepts only through the unchanged official interval certifier. Failure to
+converge is not itself acceptance or rejection. Every geometric candidate must
+pass that gate, and its measured dilation is included in the reported side.
+
+On the locally generated CUDA states, polishing reached n=5
+2.707106781357427 and n=10 3.707106781480190. These are within 3e-10 of the
+analytic constructions, not an exact match at all published decimal places.
+The n=11 and n=17 initial quality runs plateaued around 3.88674603 and
+4.70710678. They do not match the current records.
+
+`scheduler.py --initialize --jobs 0` builds credited analytic Göbel staircase
+and 45-degree-strip constructions, plus the existing tilted-five extension.
+No SVG coordinates or published solver output are imported. This is known
+constructive mathematics, not a claim of GPU rediscovery. Göbel attribution and
+formula were checked against David Ellsworth's current successor to Friedman's
+archive at
+https://kingbird.myphotos.cc/packing/squares_in_squares__G%C3%B6bel_strips.html .
+Current target records are at
+https://kingbird.myphotos.cc/packing/squares_in_squares.html .
+In particular n=50 is now 53/7, not the obsolete 7.598 on older mirrors.
+Record matching is compared against the published precision interval, including
+any added numerical safety clearance. No new mathematical record is claimed.
+
+The CUDA executable accepts n=1..1000. n above the small shared-memory limit
+uses global coordinates with pair-parallel single-square proposals; n is not
+limited by a shared-memory coordinate array. Replica exchanges copy coordinates
+in strides. Each proposal reads an immutable snapshot before a single writer
+commits, avoiding concurrent coordinate-update races. Memory is bounded by
+O(chains*n), not O(chains*n*n). This global path is intentionally conservative
+and not a demonstrated speed improvement over the small-n kernel.
+
+Compile-time `PACK_THREADS` supports 32,64,128,256. Runtime `PACK_TMIN`,
+`PACK_TMAX`, `PACK_MOVE`, `PACK_ROTATION`, and `PACK_SHRINK` expose
+temperature/move/shrink controls. The finite chain and epoch counts remain CLI
+arguments. Configurability is not the same as a completed autotuning experiment.
+
+The scheduler persists per-n bests and attempts under an explicit output
+directory. Priority is estimated remaining normalized gain divided by
+sqrt(n)*(1+attempts), with extra focus for the record test cases.
+`--coverage` visits every unvisited nonsquare once before repeats. Perfect
+squares always remain exact decimal grids. A prepared remote `batch.py`
+coverage run is finite, skips completed outputs, then merges back through the
+official gate. A completed valid CSV alone does not mean every n received
+GPU optimization. The report distinguishes attempted coverage from certified
+improvements and uses the actual repository score, sum(L/sqrt(n)-1), smaller
+is better. `--finalize --jobs 0` certifies all requested puzzles and writes
+the merged CSV and score report.
+
+Example local commands, from the repository root with the editable package
+and optimize dependencies installed:
+
+```sh
+python cuda/polish.py cuda/results/raw5.json cuda/results/raw10.json
+python cuda/scheduler.py --initialize --jobs 0
+python cuda/scheduler.py --coverage --jobs 969 --epochs 8 --steps 16 --chains 64
+python cuda/scheduler.py --finalize --jobs 0
+```
+
+A short coverage pass establishes actual large-n execution, not record-quality
+search. Longer gain-weighted runs and diverse restarts are still required.
