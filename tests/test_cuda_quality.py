@@ -86,3 +86,13 @@ def test_record_comparison_uses_decimal_not_rounded_float():
     assert not result["exactly_equal_to_published_decimal"]
     assert result["signed_difference"].startswith("7.524400")
     assert not comparison("3.8867460288941977","3.87708359002281")["within_tolerance"]
+
+def test_autotune_matrix_is_finite_and_reproducible(tmp_path):
+    from autotune import prepare
+    prepare(tmp_path)
+    script=(tmp_path/"tune-run.sh").read_text()
+    launches=[line for line in script.splitlines() if line.startswith("PACK_TMIN=")]
+    assert len(launches)==12
+    assert all("seed11.txt 4000 64" in line for line in launches)
+    assert len({line.split()[-1] for line in launches})==12
+    assert "while " not in script

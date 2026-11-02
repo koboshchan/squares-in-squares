@@ -143,3 +143,29 @@ python cuda/scheduler.py --finalize --jobs 0
 
 A short coverage pass establishes actual large-n execution, not record-quality
 search. Longer gain-weighted runs and diverse restarts are still required.
+
+The finite tuning matrix is reproducible with
+`python cuda/autotune.py OUTPUT --prepare`. Put its `tune-run.sh` beside
+the three compiled executables (`packing`, `packing128`, `packing256`)
+and `seed11.txt`, then run it once. It executes twelve combinations of
+64/128/256 block threads, 256/1024 chains and two move/temperature settings,
+each with 4,000 epochs and 64 steps. Analyze the resulting JSON files with
+`python cuda/autotune.py OUTPUT/tuning`. Throughput alone is not quality:
+the report retains official-certified decimal extents and ranks polished
+quality before speed. A single matrix is a hardware-specific measurement,
+not a statistically established universal optimum.
+
+`python cuda/record_report.py outputs/sweep` reports each focus case's
+full official-certified L, the cited published decimal, and their signed
+and absolute differences using 80-digit decimal arithmetic. “Within
+1e-14” means absolute side-length error at most 1e-14. It never means exact
+equality or a new record. Analytic construction safety clearance and
+float-polish dilation are included in the measured bounding side.
+
+A complete n=1..1000 submission has 1,000 packings but **500,500 data rows**
+plus a header, one row per unit square. Columns are
+`id,n,square_id,x,y,angle`; global `id` is consecutive from zero,
+`square_id` is local to each packing, centers are `x,y`, and angles
+are radians. Exact decimal strings are preserved. The final report
+separately counts GPU-executed cases and best-packing provenance, since
+running a GPU search does not necessarily beat an analytic or grid seed.
