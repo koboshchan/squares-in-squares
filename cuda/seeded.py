@@ -29,7 +29,7 @@ def rank_targets(state, targets, max_n=128):
 
 def write_seed(path, rows, provenance, dilation=1.00000002):
     n=len(rows);side=certify(n,rows)
-    if not 1<=n<=128 or not math.isfinite(dilation) or not 1<=dilation<=1.001:
+    if not 1<=n<=384 or not math.isfinite(dilation) or not 1<=dilation<=1.001:
         raise ValueError("invalid seeded search input")
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
     path.write_text(f"{n} {float(side)*dilation:.17g}\n"+"".join(
