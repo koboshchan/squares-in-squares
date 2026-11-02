@@ -66,3 +66,14 @@ def test_coverage_merge_resume_and_baseline(tmp_path):
     assert not (d/"best"/"2.json").exists()  # dilation cannot beat exact grid
     atomic_json(raw/"3.json",dict(n=2,q=[[.5,.5,0],[1.5,.5,0]]))
     with pytest.raises(ValueError,match="n mismatch"):batch.merge(d,raw)
+
+
+def test_provenance_is_partition_execution_independent():
+    from scheduler import provenance_counts
+    state={"1":dict(source="exact grid",attempts=0),
+           "2":dict(source="analytic Goebel 1979 construction",attempts=1),
+           "3":dict(source="CUDA coverage batch",attempts=2),
+           "4":dict(source="local certified candidate",attempts=0)}
+    counts=provenance_counts(state,4)
+    assert counts==dict(analytic_best=1,gpu_best=1,baseline_best=1,other_best=1,
+                        actual_gpu_cases=2,actual_gpu_runs=3)

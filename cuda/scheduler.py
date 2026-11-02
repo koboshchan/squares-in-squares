@@ -92,6 +92,22 @@ def _evaluate_item(item):
     n,rows=item
     return n,certify(n,rows)
 
+def provenance_counts(state,max_n):
+    """Best-source counts partition n; execution counts are independent."""
+    counts=dict(analytic_best=0,gpu_best=0,baseline_best=0,other_best=0,
+                actual_gpu_cases=0,actual_gpu_runs=0)
+    for n in range(1,max_n+1):
+        item=state[str(n)]
+        attempts=item.get("attempts",0)
+        counts["actual_gpu_cases"]+=attempts>0
+        counts["actual_gpu_runs"]+=attempts
+        src=item.get("source","")
+        key=("baseline_best" if src=="exact grid" else
+             "analytic_best" if ("Goebel" in src or "tilted-five" in src) else
+             "gpu_best" if "CUDA" in src else "other_best")
+        counts[key]+=1
+    return counts
+
 def final_report(directory,max_n):
     puzzles={}
     for n in range(1,max_n+1):
@@ -111,6 +127,11 @@ def final_report(directory,max_n):
                 nonperfect_total=sum(math.isqrt(n)**2!=n for n in range(1,max_n+1)),
                 improved=sum(float(state[str(n)]["L"])<math.isqrt(n-1)+1 for n in range(1,max_n+1)),
                 all_nonperfect_processed=all(v.get("attempts",0)>0 for n,v in state.items() if math.isqrt(int(n))**2!=int(n)))
+    report.update(provenance_counts(state,max_n))
+    report.update(csv_data_rows=sum(len(rows) for rows in puzzles.values()),
+                  csv_columns=["id","n","square_id","x","y","angle"],
+                  side_lengths={str(r["n"]):r["L"] for r in measured["results"]},
+                  score_definition="sum(L/sqrt(n)-1), lower is better")
     atomic_json(directory/"report.json",report)
     print(json.dumps(report),flush=True)
     return report
