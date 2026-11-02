@@ -62,7 +62,7 @@ def main():
                 # Both unchanged official paths gate replacement, never the C++ verdict alone.
                 L=certify(n,candidate);rtL=certify(n,kaggle_roundtrip({n:candidate})[n])
                 case.update(status="certified",L=L,roundtrip_L=rtL,dilation=dilation)
-                if Decimal(L)<Decimal(best["L"]) and Decimal(rtL)<Decimal(best.get("roundtrip_L",best["L"])):
+                if Decimal(L)<Decimal(best["L"]) and Decimal(rtL)<Decimal(best["roundtrip_L"] if "roundtrip_L" in best else certify(n,kaggle_roundtrip({n:rows})[n])):
                     atomic_json(bestpath,dict(rows=candidate,L=L,roundtrip_L=rtL,source="GPU",previous_L=best["L"]))
                     state["gpu_improved"].append(n);case["gpu_improved"]=True
                 break
