@@ -21,7 +21,7 @@ def raw_grid():
                 collective=1,polish=120)
 
 def test_gpu_provenance_never_credits_imported_records():
-    meta=dict(n=2,L="3",source="imported record")
+    meta=dict(n=2,L="2",source="imported record")
     r=certify_raw(raw_grid(),"3",meta)
     assert r["strict_incumbent_improvement"] and not r["gpu_earned"]
     assert r["imported_record"] and not r["cpu_optimizer"]

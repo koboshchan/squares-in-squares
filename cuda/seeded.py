@@ -22,7 +22,7 @@ def rank_targets(state, targets, max_n=128):
     for n, target in targets.items():
         if 1<=n<=max_n and str(n) in state:
             side=float(state[str(n)]["L"])
-            gap=(side*side-float(target)**2)/n
+            gap=(side-float(target))/math.sqrt(n)
             if gap>1e-12: rows.append(dict(n=n,incumbent_L=state[str(n)]["L"],
                                          target_L=str(target),score_gap=gap))
     return sorted(rows,key=lambda row:(-row["score_gap"],row["n"]))
@@ -49,16 +49,16 @@ def certify_raw(raw, incumbent_L, seed_metadata):
     side=certify(n,rows)
     current=Decimal(incumbent_L)
     new=Decimal(side);seed_L=Decimal(seed_metadata["L"])
-    # Imported records are never claimed as earned gains against analytic seeds.
+    # Only improvements beyond the undilated imported seed can earn GPU credit.
     imported="record" in seed_metadata["source"].lower()
-    gpu_earned=(new<current and new<seed_L and not imported)
+    gpu_earned=(new<current and new<seed_L)
     return dict(n=n,L=side,rows=rows,source="seeded GPU SA + on-device gradient",
                 seed=seed_metadata,raw_sha256=hashlib.sha256(
                     json.dumps(raw,sort_keys=True).encode()).hexdigest(),
                 strict_incumbent_improvement=new<current,
                 improves_undilated_seed=new<seed_L,
                 gpu_earned=gpu_earned,imported_record=imported,
-                score_delta=float((current*current-new*new)/Decimal(n)),
+                score_delta=float((current-new)/Decimal(n).sqrt()),
                 dilation=dilation,cpu_optimizer=False,
                 seconds=raw["seconds"],collective=raw["collective"],
                 device_polish_iterations=raw["polish"])

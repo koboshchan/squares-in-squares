@@ -14,7 +14,7 @@
 #ifndef SEED_THREADS
 #define SEED_THREADS 64
 #endif
-constexpr int NT=SEED_THREADS, MAXN=128, LADDER=8;
+constexpr int NT=SEED_THREADS, MAXN=384, LADDER=8;
 static_assert(NT==32||NT==64||NT==128||NT==256,"threads");
 struct P {double x,y,a;};
 struct G {double x,y,a;};
@@ -58,6 +58,42 @@ __device__ double total(P* q,int n,double L,double* tmp){
 }
 __global__ void random_init(curandStatePhilox4_32_10_t* r,int chains,unsigned long long seed){
  int b=blockIdx.x*blockDim.x+threadIdx.x;if(b<chains)curand_init(seed,b,0,r+b);
+}
+// Every parametric strip count, angle and offset is generated ON DEVICE.
+// A quarter of chains retain the actual published seed; another quarter get
+// local perturbations. The rest explore grid+diagonal-strip topologies.
+__global__ void structured_init(P* all,curandStatePhilox4_32_10_t* rng,
+ int n,int chains,double L,int enabled){
+ int b=blockIdx.x,t=threadIdx.x;if(b>=chains||!enabled)return;
+ __shared__ int kind,k,strips,cols;__shared__ double angle,ox,oy,jitter;
+ if(t==0){
+  auto r=rng[b];kind=b%4;
+  strips=1+curand(&r)%max(1,min(6,(int)sqrt((double)n)));
+  k=1+curand(&r)%max(1,min(n-1,(int)(sqrt((double)n)*strips)));
+  angle=(.125+.25*curand_uniform_double(&r))*3.141592653589793;
+  cols=max(1,(int)ceil(sqrt((double)(n-k))));ox=.5*(L-cols);
+  oy=.5*(L-ceil((double)(n-k)/cols));jitter=.00001*pow(1000.,curand_uniform_double(&r));
+  rng[b]=r;
+ }__syncthreads();
+ auto r=rng[b];
+ // Each thread uses its own reproducible substream; no shared RNG writes.
+ skipahead((unsigned long long)(t+1)*4096,&r);
+ for(int i=t;i<n;i+=blockDim.x){
+  P p=all[b*n+i];
+  if(kind==1){p.x+=jitter*(2*curand_uniform_double(&r)-1);
+             p.y+=jitter*(2*curand_uniform_double(&r)-1);
+             p.a+=jitter*(2*curand_uniform_double(&r)-1);}
+  if(kind>=2){
+   if(i<n-k)p={ox+.5+i%cols,oy+.5+i/cols,0};
+   else {
+    int j=i-(n-k),length=(k+strips-1)/strips;
+    double x=(j%length)-.5*(length-1),y=(j/length)-.5*(strips-1);
+    // Sweep both diagonal positions rather than only a central diamond.
+    p={L*(kind==2?.7:.5)+cos(angle)*x-sin(angle)*y,
+       L*.5+sin(angle)*x+cos(angle)*y,angle};
+   }
+  }all[b*n+i]=p;
+ }
 }
 // One chain per block, immutable proposal snapshot and block-wide energy test.
 // Collective moves deliberately cross the independent-single-square local basins.
@@ -143,6 +179,7 @@ int main(int argc,char**argv){
  std::vector<P> seed(n);for(auto& p:seed){in>>p.x>>p.y>>p.a;if(!in||!std::isfinite(p.x)||!std::isfinite(p.y)||!std::isfinite(p.a))return 2;}
  double shrink=env("SEED_SHRINK",.001,1e-7,.1),tmax=env("SEED_TMAX",.0001,1e-11,.1),mv=env("SEED_MOVE",.02,1e-6,.3);
  int collective=env("SEED_COLLECTIVE",1,0,1),polish=env("SEED_POLISH",120,0,4096);
+ int structured=env("SEED_STRUCTURED",0,0,1);
  std::vector<P> h(n*chains),best;std::vector<double> e(chains);
  for(int b=0;b<chains;b++)for(int i=0;i<n;i++)h[b*n+i]=seed[i];
  P* d;double* de;curandStatePhilox4_32_10_t* rng;unsigned long long* stats;
@@ -150,7 +187,8 @@ int main(int argc,char**argv){
  CK(cudaMalloc(&rng,chains*sizeof(*rng)));CK(cudaMalloc(&stats,5*sizeof(*stats)));CK(cudaMemset(stats,0,5*sizeof(*stats)));
  CK(cudaMemcpy(d,h.data(),h.size()*sizeof(P),cudaMemcpyHostToDevice));
  random_init<<<(chains+255)/256,256>>>(rng,chains,strtoull(argv[5],nullptr,10));CK(cudaGetLastError());
- double bestL=L;int shrinks=0;auto start=std::chrono::steady_clock::now();
+ structured_init<<<chains,NT>>>(d,rng,n,chains,L,structured);CK(cudaGetLastError());
+ best=seed;double bestL=L;int shrinks=0;auto start=std::chrono::steady_clock::now();
  for(int epoch=0;epoch<epochs;epoch++){
   search<<<chains,NT>>>(d,de,rng,n,L,steps,epoch,collective,polish,tmax,mv,stats);CK(cudaGetLastError());
   CK(cudaMemcpy(e.data(),de,chains*sizeof(double),cudaMemcpyDeviceToHost));
@@ -167,7 +205,7 @@ int main(int argc,char**argv){
  unsigned long long counts[5];CK(cudaMemcpy(counts,stats,sizeof(counts),cudaMemcpyDeviceToHost));
  std::ofstream out(argv[6]);out<<std::setprecision(17)<<"{\"n\":"<<n<<",\"target_L\":"<<bestL<<",\"seconds\":"<<seconds<<",\"shrinks\":"<<shrinks
  <<",\"epochs\":"<<epochs<<",\"steps\":"<<steps<<",\"chains\":"<<chains<<",\"collective\":"<<collective<<",\"polish\":"<<polish
- <<",\"proposals\":"<<counts[1]<<",\"accepted\":"<<counts[2]<<",\"exchange_attempts\":"<<counts[3]<<",\"exchange_accepts\":"<<counts[4]<<",\"q\":[";
+ <<",\"structured\":"<<structured<<",\"proposals\":"<<counts[1]<<",\"accepted\":"<<counts[2]<<",\"exchange_attempts\":"<<counts[3]<<",\"exchange_accepts\":"<<counts[4]<<",\"q\":[";
  for(size_t i=0;i<best.size();i++){if(i)out<<",";out<<"["<<best[i].x<<","<<best[i].y<<","<<best[i].a<<"]";}out<<"]}\n";
  CK(cudaFree(d));CK(cudaFree(de));CK(cudaFree(rng));CK(cudaFree(stats));return out?0:2;
 }

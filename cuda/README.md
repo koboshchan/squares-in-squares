@@ -195,3 +195,26 @@ GPU coordinates without a CPU optimizer. Record imports cannot earn GPU
 credit merely by replacing an analytic incumbent. Every accepted improvement
 must strictly beat the undilated seed and current certified incumbent.
 The previous 1,000-packing CSV and provenance remain immutable inputs.
+
+## Published-record imports
+
+Install the `records` extra and separately obtain the author's parser from
+https://github.com/Davidebyzero/packing_squares_in_squares__tools .
+`records.py` reads the live catalogue, retains actual linked SVG URLs and
+attributions, and converts geometry without optimization. Float64 SAT and the
+unchanged official interval certifier independently gate each import.
+The source manifest records content hashes, parser commit, source URL,
+certified side, and reuse status. No express license was found on the
+catalogue or parser; do not mistake public access for an open-source license.
+Original SVGs and third-party parser code are not redistributed here.
+
+Import gains are not GPU discoveries. GPU credit requires a strict certified
+improvement over BOTH the current incumbent and the undilated published seed.
+Prioritize remaining gaps using the official metric `(L - record_L)/sqrt(n)`,
+not an area difference. Missing catalogue entries above 324 have unknown
+targets, not invented grid records.
+
+`SEED_STRUCTURED=1` enables on-device perturbed published seeds and parametric
+grid-plus-diagonal strips, sampling strip counts, lengths, angles, and offsets.
+It is explicitly bounded to n <= 384. Import and certify first, recompute gaps,
+then allocate a single GPU job only for cases with a positive remaining gap.
