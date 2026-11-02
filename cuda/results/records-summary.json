@@ -1,0 +1,114 @@
+{
+  "score": 24.21590689512412,
+  "max_n": 1000,
+  "accepted": 1000,
+  "missing": 0,
+  "rejected": 0,
+  "score_before": 25.48854662420754,
+  "score_after_imports": 24.215906895124125,
+  "import_score_delta": 1.272639729083417,
+  "gpu_score_delta": 0,
+  "gpu": {
+    "results": [
+      {
+        "n": 5,
+        "L": "2.70710681549939365000000000000000000000000000000000",
+        "source": "seeded GPU SA + on-device gradient",
+        "seed": {
+          "n": 5,
+          "L": "2.70710678118654752440084606920678118654752440084436",
+          "source": "imported record https://kingbird.myphotos.cc/packing/square-5.svg",
+          "seed_sha256": "569ca1d5c37934aab46c1a5f4b0fd3d9036baac8795a33ef7f973e116657d0d3",
+          "center_dilation": 1.00000002
+        },
+        "raw_sha256": "b4f08f2819d1ac5b9a1d7893c50736a2cae5710201309ecab3ce1cef4ae2e534",
+        "strict_incumbent_improvement": false,
+        "improves_undilated_seed": false,
+        "gpu_earned": false,
+        "imported_record": true,
+        "score_delta": -1.5345171287666e-08,
+        "dilation": 1.0000000001,
+        "cpu_optimizer": false,
+        "seconds": 0.704396592,
+        "collective": 1,
+        "device_polish_iterations": 120
+      },
+      {
+        "n": 10,
+        "L": "3.70710683559939405000000000000000000000000000000000",
+        "source": "seeded GPU SA + on-device gradient",
+        "seed": {
+          "n": 10,
+          "L": "3.70710678118654752440084706920678118654752440084436",
+          "source": "imported record https://kingbird.myphotos.cc/packing/square-10.svg",
+          "seed_sha256": "e8b513eb062e6dc1e3eeaea0633104b757ca3bb6f3fab24dba44b01a7f9f8270",
+          "center_dilation": 1.00000002
+        },
+        "raw_sha256": "17830d300c2e4fd44a689e5aa9b1a6dab5bebccf736c396ae936715754e22466",
+        "strict_incumbent_improvement": false,
+        "improves_undilated_seed": false,
+        "gpu_earned": false,
+        "imported_record": true,
+        "score_delta": -1.7206852899407283e-08,
+        "dilation": 1.0000000001,
+        "cpu_optimizer": false,
+        "seconds": 0.925861031,
+        "collective": 1,
+        "device_polish_iterations": 120
+      },
+      {
+        "n": 29,
+        "L": "5.93383347869949397000000000000000000000000000000000",
+        "source": "seeded GPU SA + on-device gradient",
+        "seed": {
+          "n": 29,
+          "L": "5.93383346267692918968946555018548181536302387053850",
+          "source": "imported record https://kingbird.myphotos.cc/packing/square-29.svg",
+          "seed_sha256": "defa1e1fac9937f4d2e8204348af79746b3e40f3668ad97789bca7508fdb2ee3",
+          "center_dilation": 1.00000002
+        },
+        "raw_sha256": "731549e6689b1cb631f0480f0d119346672b999ef4157290d2348730ce9bc53d",
+        "strict_incumbent_improvement": false,
+        "improves_undilated_seed": false,
+        "gpu_earned": false,
+        "imported_record": true,
+        "score_delta": -2.975315585343485e-09,
+        "dilation": 1.0000000001,
+        "cpu_optimizer": false,
+        "seconds": 2.226447087,
+        "collective": 1,
+        "device_polish_iterations": 120
+      },
+      {
+        "n": 28,
+        "L": "5.82444463081441500923132169163975125717671769602074",
+        "source": "seeded GPU SA + on-device gradient",
+        "seed": {
+          "n": 28,
+          "L": "5.82444461667405929695863358329299769396319830568405",
+          "source": "imported record https://kingbird.myphotos.cc/packing/square-28.svg",
+          "seed_sha256": "cc81c7add59e07a9ac03e435f68e64cf283f14fc0a86cab13aac4a91d64a3de8",
+          "center_dilation": 1.00000002
+        },
+        "raw_sha256": "399ddc082dacda257f108534d7e061c9ecaab38d5ab7bc8c5fbdd3c420947e0a",
+        "strict_incumbent_improvement": false,
+        "improves_undilated_seed": false,
+        "gpu_earned": false,
+        "imported_record": true,
+        "score_delta": -2.672276047476081e-09,
+        "dilation": 1.0000000001,
+        "cpu_optimizer": false,
+        "seconds": 2.177475624,
+        "collective": 1,
+        "device_polish_iterations": 120
+      }
+    ],
+    "gpu_gains": 0
+  },
+  "source_count": 173,
+  "strict_imports": 129,
+  "csv_sha256": "5d321184da9ebf7239acf8701f608694bd0fe3b856c92033652473aa8d3b222f",
+  "score_summation_roundoff": 3.552713678800501e-15,
+  "attribution_note": "No GPU candidate merged. Difference between import subtotal and independent total is floating-point summation roundoff, not a GPU gain.",
+  "csv": "outputs/records/merged/submission.csv (local artifact, not tracked)"
+}

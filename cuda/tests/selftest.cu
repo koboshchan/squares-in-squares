@@ -1,6 +1,6 @@
 // Independent float64 SAT oracle plus grid/all-pairs CUDA cross-check.
 #define main packing_program_main
-#include "packing.cu"
+#include "../packing.cu"
 #undef main
 #include <random>
 #include <algorithm>

@@ -1,6 +1,6 @@
 // Global n=1000 snapshot, energy and strided exchange regression.
 #define main packing_program_main
-#include "packing.cu"
+#include "../packing.cu"
 #undef main
 #include <algorithm>
 int main(){

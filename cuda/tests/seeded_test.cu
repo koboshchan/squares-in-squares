@@ -1,5 +1,5 @@
 #define main seeded_program_main
-#include "seeded.cu"
+#include "../seeded.cu"
 #undef main
 #include <random>
 double oracle(P p,P q){
