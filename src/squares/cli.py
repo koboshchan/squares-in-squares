@@ -5,7 +5,8 @@ import argparse
 import json
 from pathlib import Path
 
-from .core import certify, grid, merge_best, read_submission, score, write_submission
+from .core import (certify, grid, merge_best, read_submission, score, write_submission,
+                   kaggle_roundtrip, prepare_kaggle)
 
 
 def bounded_n(value: str) -> int:
@@ -40,6 +41,10 @@ def main(argv: list[str] | None = None) -> None:
         command.add_argument("--report")
         if name == "validate":
             command.add_argument("--require-complete", action="store_true")
+
+    export = commands.add_parser("export-kaggle", help="open contact gaps and certify backend float transport")
+    export.add_argument("input")
+    export.add_argument("--output", required=True)
 
     merge = commands.add_parser("merge", help="certified best side per n")
     merge.add_argument("inputs", nargs="+")
@@ -80,8 +85,17 @@ def main(argv: list[str] | None = None) -> None:
                     certify(n, rows)
                 if args.require_complete and set(puzzles) != set(range(1, args.max_n + 1)):
                     raise ValueError("submission does not contain exactly 1..max-n")
-            # score() deliberately retains official fallback behavior.
-            emit(score(puzzles, args.max_n), args.report)
+            # Kaggle reads numeric CSV columns before calling the metric.
+            transported = kaggle_roundtrip(puzzles)
+            if args.command == "validate":
+                for n, rows in transported.items():
+                    certify(n, rows)
+            emit(score(transported, args.max_n), args.report)
+        elif args.command == "export-kaggle":
+            puzzles = prepare_kaggle(read_submission(args.input))
+            write_submission(args.output, puzzles)
+            emit(dict(output=args.output, puzzles=len(puzzles),
+                      certification="official metric, decimal and pandas numeric transport"))
         elif args.command == "merge":
             puzzles = merge_best([read_submission(p) for p in args.inputs])
             write_submission(args.output, puzzles)

@@ -137,3 +137,26 @@ def test_baseline_cli(tmp_path):
 def test_invalid_n(n):
     with pytest.raises(ValueError):
         grid(n)
+
+
+def test_kaggle_transport_exposes_decimal_contact_overlap():
+    from squares.core import kaggle_roundtrip, prepare_kaggle
+    # A tiny positive decimal gap; pandas float parsing rounds the two
+    # centers asymmetrically. Decimal-only certification misses this.
+    rows = [dict(square_id="0", x="0.10000000000000001", y="0", angle="0"),
+            dict(square_id="1", x="1.100000000000000010000000000001", y="0", angle="0")]
+    assert evaluate(2, rows)[3] == "ok"
+    transported = kaggle_roundtrip({2: rows})
+    assert evaluate(2, transported[2])[3] != "ok"
+    safe = prepare_kaggle({2: rows})
+    assert evaluate(2, safe[2])[3] == "ok"
+    assert evaluate(2, kaggle_roundtrip(safe)[2])[3] == "ok"
+
+
+def test_kaggle_transport_accepts_csv_reader_envelope(tmp_path):
+    from squares.core import kaggle_roundtrip, prepare_kaggle
+    path = tmp_path / "grid.csv"
+    write_submission(path, {2: grid(2)})
+    loaded = read_submission(path)
+    assert prepare_kaggle(loaded) == loaded
+    assert evaluate(2, kaggle_roundtrip(loaded)[2])[3] == "ok"

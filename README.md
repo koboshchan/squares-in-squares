@@ -166,3 +166,22 @@ The 77-test suite covers exact contact, microscopic overlap, malformed input, gr
 ## License
 
 Project code is [MIT licensed](LICENSE). The bundled Kaggle metric retains its separate [Apache 2.0 license](vendor/LICENSE-APACHE-2.0) and [attribution notice](vendor/NOTICE).
+
+### Kaggle CSV transport safety
+
+Decimal-preserving certification is necessary but not sufficient. Kaggle reads
+numeric columns into a DataFrame before `metric.score` serializes them again.
+The default pandas parser can destroy microscopic contact gaps, turning an
+otherwise certified packing into an interval-certified overlap. Angles remain
+radians; touching is allowed only when separation is certified, with no positive
+overlap tolerance. Coordinates must be decimal literals, without an `s` prefix.
+
+Use `squares export-kaggle input.csv --output submission-kaggle-safe.csv` before
+uploading. It keeps already-safe puzzles unchanged and dilates unsafe center
+coordinates by `1.00000002`, leaving square sizes and angles unchanged. Both
+literal geometry and the full-frame pandas numeric round trip must pass the
+unmodified official metric. No grid fallback is silently substituted.
+
+The `score` and `validate` CLI commands now check this numeric round trip as
+well. The Python `core.score` function remains a decimal-preserving geometry
+primitive. The upstream metric snapshot itself is unchanged.
