@@ -67,3 +67,13 @@ double-click the batch file to resume the unfinished pass. No automatic startup
 is installed. If a worker or final certification fails, the supervisor exits
 with an error instead of skipping a pass or replacing the known-good CSV.
 The supervisor never submits to Kaggle.
+
+The latest endless supervisor uses only the C++ certifier, both literal and
+`--roundtrip`, including candidate replacement, live length metadata, and
+1000/1000 final CSV promotion. It does not import the Python metric or certifier.
+The legacy seed-42 process remains untouched and retains its original checks
+until it exits. New passes use cpp_pass.py with up to four concurrent n workers.
+Each owns separate seed, output, log and certification files. Only the coordinator
+writes pass state. VRAM and available host RAM are checked before dispatch, with
+2GiB reserved and conservative per-worker budgets. batch-tuning.json can cap
+concurrency at the best measured throughput level. No fp32 kernel change is used.

@@ -16,17 +16,32 @@ import subprocess
 import sys
 import time
 from tqdm import tqdm
-from full_run import cpp
-from scheduler import atomic_json
-from squares.core import read_submission, score, kaggle_roundtrip
+from cpp_loop import atomic_json, gates, write_csv
 
 def load(path):
     return json.loads(Path(path).read_text())
 
 def live_score(directory):
-    # One small JSON at a time, never retain all 500,500 squares.
-    return math.fsum(max(0.,float(load(p)["L"])/math.sqrt(int(p.stem))-1)
-                     for p in (directory/"best").glob("*.json"))
+    lengths=directory/"cpp-lengths";lengths.mkdir(exist_ok=True)
+    changed=[];values={};stamps={}
+    for p in sorted((directory/"best").glob("*.json")):
+        best=load(p);out=lengths/p.name;n=int(p.stem)
+        if best.get("certifier")=="cpp-both":
+            values[n]=best["L"]
+        else:
+            cached=load(out) if out.exists() else {}
+            stamp=p.stat().st_mtime_ns
+            if cached.get("source_mtime")!=stamp:
+                changed.append((n,best["rows"]));stamps[n]=stamp
+            else:values[n]=cached["L"]
+    if changed:
+        snap=directory/"live-candidate.csv";write_csv(snap,changed)
+        literal,rt=gates(snap,1000)
+        for n,_ in changed:
+            cached=dict(L=literal["results"][n-1]["L"],
+                        roundtrip_L=rt["results"][n-1]["L"],source_mtime=stamps[n])
+            atomic_json(lengths/f"{n}.json",cached);values[n]=cached["L"]
+    return math.fsum(max(0.,float(L)/math.sqrt(n)-1) for n,L in values.items())
 
 def existing_runner(directory):
     for p in Path("/proc").iterdir():
@@ -35,7 +50,7 @@ def existing_runner(directory):
         try:
             args=(p/"cmdline").read_bytes().split(b"\0")
             cwd=(p/"cwd").resolve()
-            if any(x.endswith(b"cuda/full_run.py") for x in args):
+            if any(x.endswith((b"cuda/full_run.py",b"cuda/cpp_pass.py")) for x in args):
                 i=args.index(b"--directory")
                 if (cwd/os.fsdecode(args[i+1])).resolve()==directory.resolve():
                     return int(p.name)
@@ -47,14 +62,14 @@ def verify_promote(source, directory, pass_number, seed):
     """Do not alter the previous known-good CSV until every gate succeeds."""
     staging=directory/"best-so-far.pending.csv"
     shutil.copyfile(source,staging)
-    assert cpp(Path("cuda/certifier").resolve(),staging,1000,
-               directory/"promotion-cpp.json"), "C++ rejected promotion"
-    puzzles=read_submission(staging)
-    assert set(puzzles)==set(range(1,1001))
-    literal=score(puzzles)
-    transport=score(kaggle_roundtrip(puzzles))
+    literal,transport=gates(staging)
     for result in (literal,transport):
         assert result["accepted"]==1000 and result["rejected"]==result["missing"]==0
+    # Refresh small per-n C++ length metadata for live scoring, no Python geometry.
+    for a,b in zip(literal["results"],transport["results"]):
+        target=directory/"cpp-lengths"/f'{a["n"]}.json'
+        target.parent.mkdir(exist_ok=True)
+        atomic_json(target,dict(L=a["L"],roundtrip_L=b["L"]))
     old=directory/"best-so-far.json"
     if old.exists():
         previous=load(old)
@@ -81,9 +96,9 @@ def main():
     if not meta.exists():
         atomic_json(meta,dict(pass_number=1,seed=42,phase="running"))
     m=load(meta)
-    if not (d/"best-so-far.csv").exists():
+    if not (d/"cpp-lengths").exists():
         print("Verifying initial known-good CSV, seed 42 remains untouched",flush=True)
-        verify_promote(a.incumbent,d,0,42)
+        verify_promote(d/"best-so-far.csv" if (d/"best-so-far.csv").exists() else a.incumbent,d,0,42)
     while True:
         m=load(meta)
         if m["phase"]=="advance":
@@ -100,7 +115,7 @@ def main():
         child=None
         if existing_runner(d) is None:
             log=(d/"worker.log").open("a")
-            child=subprocess.Popen([sys.executable,"-u","cuda/full_run.py",
+            child=subprocess.Popen([sys.executable,"-u","cuda/cpp_pass.py",
                 "--directory",str(d),"--incumbent",str(a.incumbent),"--seed",str(m["seed"])],
                 stdout=log,stderr=subprocess.STDOUT)
             log.close()
