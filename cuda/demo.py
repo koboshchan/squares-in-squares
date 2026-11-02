@@ -71,9 +71,9 @@ def main():
     p.add_argument("--directory", type=Path, default=Path("outputs/cuda"))
     p.add_argument("--ns", type=int, nargs="+", default=[5,10,11,17,50])
     p.add_argument("--executable", default="./packing")
-    p.add_argument("--epochs", type=int, default=400)
+    p.add_argument("--epochs", type=int, default=20000)
     p.add_argument("--steps", type=int, default=32)
-    p.add_argument("--chains", type=int, default=128)
+    p.add_argument("--chains", type=int, default=256)
     a = p.parse_args()
     if any(n < 1 or n > 50 for n in a.ns):
         p.error("POC supports n=1..50")

@@ -101,7 +101,7 @@ int main(int argc,char**argv){
  if(argc!=7){std::cerr<<"packing seed.txt epochs steps chains random_seed output.json\n";return 2;}
  int epochs=atoi(argv[2]),steps=atoi(argv[3]),chains=atoi(argv[4]),n;
  if(epochs<1||epochs>100000||steps<1||steps>4096||chains<8||chains>4096||chains%8)return 2;
- std::ifstream in(argv[1]);float L;in>>n>>L;if(n<1||n>NMAX||!std::isfinite(L)||L<=0||L>16)return 2;
+ std::ifstream in(argv[1]);float L=0;n=0;if(!(in>>n>>L))return 2;if(n<1||n>NMAX||!std::isfinite(L)||L<=0||L>16)return 2;
  std::vector<Q> seed(n);for(auto& p:seed){in>>p.x>>p.y>>p.a;if(!in||!std::isfinite(p.x)||!std::isfinite(p.y)||!std::isfinite(p.a))return 2;}
  std::vector<Q> h(n*chains),best;std::vector<float> energy(chains);float bestL=L;
  for(int b=0;b<chains;b++)for(int i=0;i<n;i++)h[b*n+i]=seed[i];
@@ -128,9 +128,9 @@ int main(int argc,char**argv){
  CK(cudaDeviceSynchronize());double sec=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
  unsigned long long moves;CK(cudaMemcpy(&moves,counts,sizeof(moves),cudaMemcpyDeviceToHost));
  cudaDeviceProp prop;CK(cudaGetDeviceProperties(&prop,0));
- std::ofstream out(argv[6]);out.precision(10);
+ std::ofstream out(argv[6]);if(!out)return 2;out.precision(10);
  out<<"{\"n\":"<<n<<",\"target_L\":"<<bestL<<",\"seconds\":"<<sec<<",\"chain_steps\":"<<(long long)chains*epochs*steps
     <<",\"proposals\":"<<moves<<",\"feasible_checkpoints\":"<<feasible<<",\"shrinks\":"<<shrink<<",\"device\":\""<<prop.name<<"\",\"q\":[";
  for(size_t i=0;i<best.size();i++){if(i)out<<",";out<<"["<<best[i].x<<","<<best[i].y<<","<<best[i].a<<"]";}
- out<<"]}\n"; CK(cudaFree(d));CK(cudaFree(de));CK(cudaFree(rng));CK(cudaFree(counts));
+ out<<"]}\n"; CK(cudaFree(d));CK(cudaFree(de));CK(cudaFree(rng));CK(cudaFree(counts));return out?0:2;
 }

@@ -13,3 +13,9 @@ secrets/
 
 # local scratch
 scratch/
+
+# Local CUDA executables
+cuda/packing
+cuda/selftest
+*.exe
+*.o

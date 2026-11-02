@@ -141,6 +141,10 @@ Coordinates and angles remain decimal strings throughout loading, merging and wr
 
 mpmath is pinned to 1.4.1 because the snapshot's 50-decimal formatter uses that release's public mantissa and exponent properties. The remaining dependency bounds are in [pyproject.toml](pyproject.toml).
 
+## Experimental CUDA subproblem demo
+
+The optional [standalone CUDA prototype](cuda/README.md) uses shared-memory annealing and replica exchange on NVIDIA GPUs, without PyTorch. It supports n<=50 and certifies candidates with the unchanged official metric. Measured 4070 SUPER results, limitations and run commands are documented separately. This does not replace the Python optimizer or claim a competitive solution.
+
 ## Configuration
 
 There are no required environment variables, services or credentials. Configure runs through CLI options.
