@@ -45,3 +45,24 @@ def test_goebel_analytic_record_family(a,count):
     assert len(rows)==count
     target=a+1+1/2**.5
     assert abs(float(certify(count,rows))-target)<1e-14
+
+def test_coverage_merge_resume_and_baseline(tmp_path):
+    import json
+    import importlib
+    batch=importlib.import_module("batch")
+    d=tmp_path; (d/"best").mkdir()
+    state={str(n):dict(L=str(__import__("math").isqrt(n-1)+1),attempts=0,source="exact grid")
+           for n in range(1,6)}
+    atomic_json(d/"state.json",state)
+    batch.prepare(d,5,8,16,8)
+    jobs=json.loads((d/"batch"/"manifest.json").read_text())
+    assert sorted(j["n"] for j in jobs)==[2,3,5]
+    raw=d/"raw";raw.mkdir()
+    atomic_json(raw/"2.json",dict(n=2,q=[[.5,.5,0],[1.5,.5,0]],seconds=1,chain_steps=128))
+    batch.merge(d,raw);batch.merge(d,raw)
+    state=json.loads((d/"state.json").read_text())
+    assert state["2"]["attempts"]==1
+    assert state["1"]["attempts"]==0
+    assert not (d/"best"/"2.json").exists()  # dilation cannot beat exact grid
+    atomic_json(raw/"3.json",dict(n=2,q=[[.5,.5,0],[1.5,.5,0]]))
+    with pytest.raises(ValueError,match="n mismatch"):batch.merge(d,raw)

@@ -3,7 +3,7 @@
 Prepare/merge run beside Python dependencies. The generated POSIX script runs
 only the specified binary in its working directory, without Python or networking.
 """
-import argparse,json,math,shlex,tarfile
+import argparse,json,math,tarfile
 from pathlib import Path
 from scheduler import atomic_json,priority,final_report
 from squares.core import grid,certify
@@ -47,6 +47,8 @@ def merge(directory,rawdir):
         s=state[str(n)]
         if s.get("batch_sha256")==fingerprint:continue
         raw=json.loads(path.read_text())
+        if raw.get("n")!=n:
+            raise ValueError(f"batch n mismatch at {path}")
         try:
             rows,L,dilation=certified_candidate(raw)
             exact=certify(n,rows)
