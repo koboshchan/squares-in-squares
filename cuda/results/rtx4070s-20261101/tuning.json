@@ -1,0 +1,140 @@
+[
+  {
+    "source": "tune-t64-c1024-warm.json",
+    "n": 11,
+    "seconds": 5.926376278,
+    "chain_steps_per_second": 44233438.3952527,
+    "proposals_per_second": 49015239.22440349,
+    "config": "tune-t64-c1024-warm",
+    "certified_L": 3.9308318374890763,
+    "dilation": 1.000002,
+    "polished_L": 3.88674602889437,
+    "full_precision_L": "3.88674602889436992346837746178832847896961990033820"
+  },
+  {
+    "source": "tune-t128-c1024-warm.json",
+    "n": 11,
+    "seconds": 6.008125737,
+    "chain_steps_per_second": 43631576.880229324,
+    "proposals_per_second": 48265697.60585555,
+    "config": "tune-t128-c1024-warm",
+    "certified_L": 4.0000660815201625,
+    "dilation": 1.000002,
+    "polished_L": 4.000000000302267,
+    "full_precision_L": "4.00000000030226676631094060952714595745374795181929"
+  },
+  {
+    "source": "tune-t256-c1024-warm.json",
+    "n": 11,
+    "seconds": 8.879596558,
+    "chain_steps_per_second": 29522061.9864563,
+    "proposals_per_second": 32668214.158745117,
+    "config": "tune-t256-c1024-warm",
+    "certified_L": 4.0000660815201625,
+    "dilation": 1.000002,
+    "polished_L": 4.000000000302267,
+    "full_precision_L": "4.00000000030226676631094060952714595745374795181929"
+  },
+  {
+    "source": "tune-t128-c256-warm.json",
+    "n": 11,
+    "seconds": 2.337176914,
+    "chain_steps_per_second": 28040667.185881674,
+    "proposals_per_second": 31021166.846935574,
+    "config": "tune-t128-c256-warm",
+    "certified_L": 4.0000660815201625,
+    "dilation": 1.000002,
+    "polished_L": 4.000000000302267,
+    "full_precision_L": "4.00000000030226676631094060952714595745374795181929"
+  },
+  {
+    "source": "tune-t64-c256-warm.json",
+    "n": 11,
+    "seconds": 2.61515271,
+    "chain_steps_per_second": 25060104.425029926,
+    "proposals_per_second": 27755208.605007242,
+    "config": "tune-t64-c256-warm",
+    "certified_L": 4.0000660815201625,
+    "dilation": 1.000002,
+    "polished_L": 4.000000000302267,
+    "full_precision_L": "4.00000000030226676631094060952714595745374795181929"
+  },
+  {
+    "source": "tune-t256-c256-warm.json",
+    "n": 11,
+    "seconds": 3.712030907,
+    "chain_steps_per_second": 17655025.413828,
+    "proposals_per_second": 19530702.95381568,
+    "config": "tune-t256-c256-warm",
+    "certified_L": 4.0000660815201625,
+    "dilation": 1.000002,
+    "polished_L": 4.000000000302267,
+    "full_precision_L": "4.00000000030226676631094060952714595745374795181929"
+  },
+  {
+    "source": "tune-t64-c1024-cold.json",
+    "n": 11,
+    "seconds": 5.92388604,
+    "chain_steps_per_second": 44252032.910477795,
+    "proposals_per_second": 48563686.92062145,
+    "config": "tune-t64-c1024-cold",
+    "certified_L": 4.0000660815201625,
+    "dilation": 1.000002,
+    "rejected": "official interval certification failed"
+  },
+  {
+    "source": "tune-t128-c1024-cold.json",
+    "n": 11,
+    "seconds": 6.004003163,
+    "chain_steps_per_second": 43661535.95912088,
+    "proposals_per_second": 47918549.705800675,
+    "config": "tune-t128-c1024-cold",
+    "certified_L": 4.0000660815201625,
+    "dilation": 1.000002,
+    "rejected": "official interval certification failed"
+  },
+  {
+    "source": "tune-t256-c1024-cold.json",
+    "n": 11,
+    "seconds": 8.844959934,
+    "chain_steps_per_second": 29637669.583139572,
+    "proposals_per_second": 32526589.170188997,
+    "config": "tune-t256-c1024-cold",
+    "certified_L": 4.0000660815201625,
+    "dilation": 1.000002,
+    "rejected": "official interval certification failed"
+  },
+  {
+    "source": "tune-t128-c256-cold.json",
+    "n": 11,
+    "seconds": 2.35173958,
+    "chain_steps_per_second": 27867031.093638353,
+    "proposals_per_second": 30597693.5592503,
+    "config": "tune-t128-c256-cold",
+    "certified_L": 4.0000660815201625,
+    "dilation": 1.000002,
+    "rejected": "official interval certification failed"
+  },
+  {
+    "source": "tune-t64-c256-cold.json",
+    "n": 11,
+    "seconds": 2.599139474,
+    "chain_steps_per_second": 25214499.127721686,
+    "proposals_per_second": 27684550.8753179,
+    "config": "tune-t64-c256-cold",
+    "certified_L": 4.0000660815201625,
+    "dilation": 1.000002,
+    "rejected": "official interval certification failed"
+  },
+  {
+    "source": "tune-t256-c256-cold.json",
+    "n": 11,
+    "seconds": 3.712674161,
+    "chain_steps_per_second": 17651966.52279015,
+    "proposals_per_second": 19371241.019607484,
+    "config": "tune-t256-c256-cold",
+    "certified_L": 4.0000660815201625,
+    "dilation": 1.000002,
+    "rejected": "official interval certification failed"
+  }
+]

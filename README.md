@@ -141,6 +141,12 @@ Coordinates and angles remain decimal strings throughout loading, merging and wr
 
 mpmath is pinned to 1.4.1 because the snapshot's 50-decimal formatter uses that release's public mantissa and exponent properties. The remaining dependency bounds are in [pyproject.toml](pyproject.toml).
 
+## Experimental CUDA subproblem demo
+
+The optional [CUDA research tools](cuda/README.md) use standalone CUDA C++ and cuRAND without PyTorch. The coverage kernel handles n=1..1000; the separate float64 seeded kernel handles n<=384. Device regression tests live under cuda/tests, with architecture-selectable builds through cuda/Makefile. Host tooling retains its existing entry points.
+
+The latest complete local artifact scores 24.21590689512412, with all 1000 packings certified. Its improvement over the previous 25.48854662420754 comes from 129 strict published-record imports, not new GPU discoveries. The latest GPU experiments earned no further gains. The compact [current summary](cuda/results/records-summary.json) records provenance and artifact hash; large generated CSVs remain outside Git. Historical 4070 SUPER measurements are retained separately. [KERNEL_BRIEF.md](KERNEL_BRIEF.md) describes the next kernel task, acceptance rules and known failures.
+
 ## Configuration
 
 There are no required environment variables, services or credentials. Configure runs through CLI options.
@@ -155,8 +161,27 @@ python -m compileall -q src tests
 python -m build
 ```
 
-The 45-test suite covers exact contact, microscopic overlap, malformed input, grids, fallback penalties, official-entrypoint parity, merging, references, search and atomic writes. Wheel and source builds include the upstream attribution and license.
+The 77-test suite covers exact contact, microscopic overlap, malformed input, grids, fallback penalties, official-entrypoint parity, merging, references, search and atomic writes. Wheel and source builds include the upstream attribution and license.
 
 ## License
 
 Project code is [MIT licensed](LICENSE). The bundled Kaggle metric retains its separate [Apache 2.0 license](vendor/LICENSE-APACHE-2.0) and [attribution notice](vendor/NOTICE).
+
+### Kaggle CSV transport safety
+
+Decimal-preserving certification is necessary but not sufficient. Kaggle reads
+numeric columns into a DataFrame before `metric.score` serializes them again.
+The default pandas parser can destroy microscopic contact gaps, turning an
+otherwise certified packing into an interval-certified overlap. Angles remain
+radians; touching is allowed only when separation is certified, with no positive
+overlap tolerance. Coordinates must be decimal literals, without an `s` prefix.
+
+Use `squares export-kaggle input.csv --output submission-kaggle-safe.csv` before
+uploading. It keeps already-safe puzzles unchanged and dilates unsafe center
+coordinates by `1.00000002`, leaving square sizes and angles unchanged. Both
+literal geometry and the full-frame pandas numeric round trip must pass the
+unmodified official metric. No grid fallback is silently substituted.
+
+The `score` and `validate` CLI commands now check this numeric round trip as
+well. The Python `core.score` function remains a decimal-preserving geometry
+primitive. The upstream metric snapshot itself is unchanged.

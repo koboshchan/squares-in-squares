@@ -13,3 +13,13 @@ secrets/
 
 # local scratch
 scratch/
+
+# Local CUDA executables
+cuda/packing
+cuda/selftest
+*.exe
+*.o
+cuda/seeded
+cuda/globaltest
+cuda/seeded_test
+cuda/results/gpu-certified.csv

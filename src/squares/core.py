@@ -136,3 +136,51 @@ def merge_best(candidates: list[Puzzles]) -> Puzzles:
                 sides[n] = length
                 best[n] = [dict(row) for row in rows]
     return best
+
+
+def kaggle_roundtrip(puzzles: Puzzles) -> Puzzles:
+    """Mirror backend numeric inference followed by metric.score's to_csv.
+
+    Decimal-preserving validation alone is NOT a prediction of the leaderboard.
+    pandas' default CSV parser can move touching squares into tiny overlaps.
+    """
+    import pandas as pd
+
+    records = [dict(row, id=i, n=n)
+               for i, (n, row) in enumerate(
+                   (n, row) for n, rows in sorted(puzzles.items()) for row in rows)]
+    frame = pd.read_csv(io.StringIO(pd.DataFrame(records, columns=COLUMNS).to_csv(index=False)))
+    return metric._parse_submission_csv(frame.to_csv(index=False))
+
+
+def prepare_kaggle(puzzles: Puzzles, dilation: str = "1.00000002") -> Puzzles:
+    """Keep safe puzzles unchanged, open contact gaps in unsafe puzzles.
+
+    Only centers are dilated, not unit square sizes or radian angles. Every
+    result must pass the unchanged official metric both literally and after
+    the pandas numeric transport. Never silently substitute a grid packing.
+    """
+    from decimal import localcontext
+
+    factor = Decimal(dilation)
+    if not Decimal(1) < factor <= Decimal("1.001"):
+        raise ValueError("dilation must be > 1 and <= 1.001")
+    transported = kaggle_roundtrip(puzzles)
+    prepared = {}
+    for n, rows in sorted(puzzles.items()):
+        certify(n, rows)
+        if evaluate(n, transported[n])[3] == "ok":
+            prepared[n] = [dict(row) for row in rows]
+            continue
+        with localcontext() as ctx:
+            ctx.prec = 80
+            expanded = [dict(row, **{
+                axis: format(Decimal(row[axis]) * factor, ".60g")
+                for axis in ("x", "y")
+            }) for row in rows]
+        certify(n, expanded)
+        # Use the entire frame so pandas inference matches a complete upload.
+        prepared[n] = expanded
+    for n, rows in kaggle_roundtrip(prepared).items():
+        certify(n, rows)
+    return prepared
