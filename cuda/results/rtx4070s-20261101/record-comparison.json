@@ -1,0 +1,107 @@
+{
+  "source": "https://kingbird.myphotos.cc/packing/squares_in_squares.html",
+  "comparison": "absolute side-length tolerance, not exact record equality",
+  "safety": "All measured extents include safety clearance; analytic seeds use center dilation 1+1e-40.",
+  "cases": {
+    "5": {
+      "certified_L": "2.70710678118654752440084436210484903928500664836659",
+      "published_L": "2.70710678118654",
+      "signed_difference": "7.52440084436210484903928500664836659E-15",
+      "absolute_difference": "7.52440084436210484903928500664836659E-15",
+      "tolerance": "1e-14",
+      "within_tolerance": true,
+      "exactly_equal_to_published_decimal": false,
+      "source": "analytic Goebel 1979 construction, no imported coordinates"
+    },
+    "10": {
+      "certified_L": "3.70710678118654752440084436210484903928510664836659",
+      "published_L": "3.70710678118654",
+      "signed_difference": "7.52440084436210484903928510664836659E-15",
+      "absolute_difference": "7.52440084436210484903928510664836659E-15",
+      "tolerance": "1e-14",
+      "within_tolerance": true,
+      "exactly_equal_to_published_decimal": false,
+      "source": "analytic Goebel 1979 construction, no imported coordinates"
+    },
+    "11": {
+      "certified_L": "3.88674602889436992346837746178832847896961990033820",
+      "published_L": "3.87708359002281",
+      "signed_difference": "0.00966243887155992346837746178832847896961990033820",
+      "absolute_difference": "0.00966243887155992346837746178832847896961990033820",
+      "tolerance": "1e-14",
+      "within_tolerance": false,
+      "exactly_equal_to_published_decimal": false,
+      "source": "CUDA tuning plus float64 polish"
+    },
+    "17": {
+      "certified_L": "4.70710678118654752440084436210484903928520664836659",
+      "published_L": "4.67553009360455",
+      "signed_difference": "0.03157668758199752440084436210484903928520664836659",
+      "absolute_difference": "0.03157668758199752440084436210484903928520664836659",
+      "tolerance": "1e-14",
+      "within_tolerance": false,
+      "exactly_equal_to_published_decimal": false,
+      "source": "analytic Goebel 1979 construction, no imported coordinates"
+    },
+    "18": {
+      "certified_L": "4.82842712474619009760337744841939615713972659346637",
+      "published_L": "4.82287565553229",
+      "signed_difference": "0.00555146921390009760337744841939615713972659346637",
+      "absolute_difference": "0.00555146921390009760337744841939615713972659346637",
+      "tolerance": "1e-14",
+      "within_tolerance": false,
+      "exactly_equal_to_published_decimal": false,
+      "source": "analytic alternative Goebel strip"
+    },
+    "19": {
+      "certified_L": "5.00000000000000000000000000000000000000000000000000",
+      "published_L": "4.88561808316412",
+      "signed_difference": "0.11438191683588000000000000000000000000000000000000",
+      "absolute_difference": "0.11438191683588000000000000000000000000000000000000",
+      "tolerance": "1e-14",
+      "within_tolerance": false,
+      "exactly_equal_to_published_decimal": false,
+      "source": "exact grid"
+    },
+    "26": {
+      "certified_L": "5.70710678118654752440084436210484903928530664836659",
+      "published_L": "5.62132034355964",
+      "signed_difference": "0.08578643762690752440084436210484903928530664836659",
+      "absolute_difference": "0.08578643762690752440084436210484903928530664836659",
+      "tolerance": "1e-14",
+      "within_tolerance": false,
+      "exactly_equal_to_published_decimal": false,
+      "source": "analytic Goebel 1979 construction, no imported coordinates"
+    },
+    "27": {
+      "certified_L": "5.70710678118654752440084436210484903928530664836659",
+      "published_L": "5.70710678118654",
+      "signed_difference": "7.52440084436210484903928530664836659E-15",
+      "absolute_difference": "7.52440084436210484903928530664836659E-15",
+      "tolerance": "1e-14",
+      "within_tolerance": true,
+      "exactly_equal_to_published_decimal": false,
+      "source": "analytic Goebel 1979 construction, no imported coordinates"
+    },
+    "37": {
+      "certified_L": "6.70710678118654752440084436210484903928540664836659",
+      "published_L": "6.59861960924436",
+      "signed_difference": "0.10848717194218752440084436210484903928540664836659",
+      "absolute_difference": "0.10848717194218752440084436210484903928540664836659",
+      "tolerance": "1e-14",
+      "within_tolerance": false,
+      "exactly_equal_to_published_decimal": false,
+      "source": "analytic Goebel 1979 construction, no imported coordinates"
+    },
+    "50": {
+      "certified_L": "7.70710678118654752440084436210484903928550664836659",
+      "published_L": "7.57142857142857",
+      "signed_difference": "0.13567820975797752440084436210484903928550664836659",
+      "absolute_difference": "0.13567820975797752440084436210484903928550664836659",
+      "tolerance": "1e-14",
+      "within_tolerance": false,
+      "exactly_equal_to_published_decimal": false,
+      "source": "analytic Goebel 1979 construction, no imported coordinates"
+    }
+  }
+}

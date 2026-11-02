@@ -1,0 +1,23 @@
+{
+  "coverage_gpu_cases": 969,
+  "coverage_gpu_runs": 969,
+  "tuning_gpu_runs": 12,
+  "bounded_quality_gpu_runs": 7,
+  "total_gpu_runs": 988,
+  "larger_prior_searches_excluded": true,
+  "winner": {
+    "source": "tune-t64-c1024-warm.json",
+    "n": 11,
+    "seconds": 5.926376278,
+    "chain_steps_per_second": 44233438.3952527,
+    "proposals_per_second": 49015239.22440349,
+    "config": "tune-t64-c1024-warm",
+    "certified_L": 3.9308318374890763,
+    "dilation": 1.000002,
+    "polished_L": 3.88674602889437,
+    "full_precision_L": "3.88674602889436992346837746178832847896961990033820"
+  },
+  "coverage_epochs": 8,
+  "coverage_steps": 16,
+  "coverage_chains": 64
+}
