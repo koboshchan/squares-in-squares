@@ -143,7 +143,9 @@ mpmath is pinned to 1.4.1 because the snapshot's 50-decimal formatter uses that 
 
 ## Experimental CUDA subproblem demo
 
-The optional [standalone CUDA prototype](cuda/README.md) uses shared-memory annealing and replica exchange on NVIDIA GPUs, without PyTorch. It supports n<=50 and certifies candidates with the unchanged official metric. Measured 4070 SUPER results, limitations and run commands are documented separately. This does not replace the Python optimizer or claim a competitive solution.
+The optional [CUDA research tools](cuda/README.md) use standalone CUDA C++ and cuRAND without PyTorch. The coverage kernel handles n=1..1000; the separate float64 seeded kernel handles n<=384. Device regression tests live under cuda/tests, with architecture-selectable builds through cuda/Makefile. Host tooling retains its existing entry points.
+
+The latest complete local artifact scores 24.21590689512412, with all 1000 packings certified. Its improvement over the previous 25.48854662420754 comes from 129 strict published-record imports, not new GPU discoveries. The latest GPU experiments earned no further gains. The compact [current summary](cuda/results/records-summary.json) records provenance and artifact hash; large generated CSVs remain outside Git. Historical 4070 SUPER measurements are retained separately. [KERNEL_BRIEF.md](KERNEL_BRIEF.md) describes the next kernel task, acceptance rules and known failures.
 
 ## Configuration
 
@@ -159,7 +161,7 @@ python -m compileall -q src tests
 python -m build
 ```
 
-The 45-test suite covers exact contact, microscopic overlap, malformed input, grids, fallback penalties, official-entrypoint parity, merging, references, search and atomic writes. Wheel and source builds include the upstream attribution and license.
+The 77-test suite covers exact contact, microscopic overlap, malformed input, grids, fallback penalties, official-entrypoint parity, merging, references, search and atomic writes. Wheel and source builds include the upstream attribution and license.
 
 ## License
 

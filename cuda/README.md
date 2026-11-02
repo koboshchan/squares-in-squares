@@ -1,220 +1,44 @@
-# CUDA subproblem proof of concept
+Standalone CUDA C++17 packing research with cuRAND, without PyTorch. packing.cu handles n=1..1000; seeded.cu is a separate double-precision quality path limited to n<=384. Python host tools stay together here so existing imports and commands remain compatible. Device regression programs live in tests/. No solver behavior was changed by the layout cleanup.
 
-Standalone CUDA C++17 and cuRAND device Philox, **no PyTorch**. Supports n=1..50 only. This is a search demo, not a competitive solver or record claim. It never submits anything.
+The latest complete local artifact scores 24.21590689512412 with all 1000 packings accepted. See results/records-summary.json and ../KERNEL_BRIEF.md. The 129 strict record imports are credited geometry, not GPU discoveries. The 28-output seeded suite and four subsequent GPU attempts earned zero additional gains. Older results/rtx4070s-20261101/ describe the pre-import 25.48854662420754 result and must not be confused with the current artifact. Large CSVs, logs, binaries and generated output belong outside Git; small raw fixtures and compact evidence remain for regression tests.
 
-## Build and run
-
-Install the repository's optimize and dev extras using its normal Python 3.12+ environment. CUDA 12.4 and g++ were used on the RTX 4070 SUPER through the desktop's existing Ubuntu WSL installation. No WSL restart or system configuration changes are needed.
-
-From the repository root, on Linux/WSL:
-
-~~~sh
-nvcc -O3 -std=c++17 -arch=sm_89 cuda/packing.cu -o cuda/packing
-nvcc -O3 -std=c++17 -arch=sm_89 cuda/selftest.cu -o cuda/selftest
-./cuda/selftest
-python cuda/demo.py run --executable ./cuda/packing \
-  --epochs 20000 --steps 32 --chains 256
-pytest -q
-~~~
-
-Use an architecture supported by your NVIDIA GPU; sm_89 is the measured 4070 SUPER. Do not use fast-math. Native Windows needs a compatible MSVC toolchain; this demo was compiled with WSL CUDA instead.
-
-The driver generates seed files, runs each n sequentially, certifies GPU output with the repo's **unchanged official v20 interval certifier**, and writes outputs/cuda/report.json and gpu-certified.csv. It never substitutes a baseline if a GPU proposal fails. The direct executable takes seed-file, epochs, steps, chains, RNG seed, output JSON. Chains must be a multiple of eight, 8..4096; steps are 1..4096. Empty q means no zero-energy checkpoint was found and is rejected by the host driver.
-
-For certification of checked-in results without a GPU:
-
-~~~sh
-python cuda/demo.py report --directory cuda/results
-~~~
-
-## Design and safety
-
-One 64-thread block owns one chain; x,y,angle live in shared float32 arrays. A collision-free 16x16 uniform-grid bucket index with atomic linked lists filters neighbors. Cell width 2 exceeds the maximum center interaction radius sqrt(2). Final checkpoint energy is independently recomputed using **all pairs**, never the grid filter.
-
-Threads propose single-square translation/rotation moves on a conservative independent set. Cyclic priorities select squares whose original centers are more than 3.3 apart; bounded per-coordinate translation is at most 0.12. Thus two simultaneously selected squares cannot interact either before or after their moves. Proposals read the same immutable shared snapshot and commit only after a block barrier. The priority rule is deliberately conservative and often selects only one square for small dense packings.
-
-The objective is sum of squared positive SAT penetration depths plus squared wall violations. Metropolis moves use persistent per-thread Philox states. Every epoch uses a fixed common L and an eight-temperature geometric ladder, repeated across independent replica groups. A separate kernel proposes disjoint adjacent replica exchanges between completed walk kernels; it swaps configurations, not RNG streams. Alternating parity never exchanges across ladder-group boundaries. Cooling makes this a heuristic optimization schedule, not a stationary sampling claim.
-
-A zero checkpoint copies its coordinates to the host and retains the latest zero-L snapshot. All chains are reseeded from that winner at L minus 0.002, scaled inward. The ladder always shares L. The executable retains only its latest zero checkpoint, so an eventual host rejection does not recover earlier checkpoints. There is no on-GPU exact validity claim.
-
-The host converts float32 coordinates to float64, tries bounded center dilation factors 1.000002, 1.00001, 1.0001, and passes decimal strings to the repo's interval certifier. Dilation is explicitly included in measured L; it is not an allowed-overlap tolerance. No changes were made to the official metric.
-
-Allocation is fixed and small, under 2 MB at 256 chains (under 32 MB at the chain limit), excluding CUDA context overhead. No per-step allocation, dataset input, background processes, extra GPU rental, or external service is used.
-
-## Measured demo
-
-November 1, 2026, RTX 4070 SUPER, CUDA 12.4, g++, 256 chains, 20,000 epochs, 32 steps, seed 42. Device was shared with normal Windows graphics applications. Times include loop kernel launches, checkpoint transfers, and replica exchanges, but exclude CUDA initialization, seed preparation and Python certification.
-
-| n | Repo starting seed L | GPU certified L | Seconds | Million chain-steps/s | Million proposals/s |
-|---|---:|---:|---:|---:|---:|
-| 5 | 2.707106782894 | 2.707144336682 | 4.480 | 36.58 | 36.58 |
-| 10 | 4 | 3.707824944118 | 6.384 | 25.66 | 25.82 |
-| 11 | 4 | 3.889855843061 | 7.606 | 21.54 | 25.00 |
-| 17 | 5 | 4.710065339847 | 9.187 | 17.83 | 25.93 |
-| 50 | 8 | 8.000154190680 | 14.477 | 11.32 | 22.55 |
-
-A chain-step is one block's independent-set proposal round, not a sweep over all n squares. Proposal counts measure individual square proposals, including rejected ones. Each run had 163,840,000 chain-steps. Floating atomic linked-list summation can vary slightly between runs even with a fixed RNG seed.
-
-The baseline here is **the repo's existing deterministic starting construction**, not a timed comparison against its default 20-attempt SciPy optimizer. n=5 uses the existing credited tilted-five construction; all others use grid(n). GPU improves n=10,11,17 relative to these seeds. It does **not** improve n=5 or n=50; their final slightly larger L comes from seed clearance/dilation. Do not replace those better baseline entries. For n=5, the improvement over the trivial grid's L=3 is inherited from the CPU construction, not discovered by this kernel. No speedup over the CPU optimizer is claimed.
-
-results/ contains raw device output, official-certified CSV, and the measured report. The measured target_L is the search box, while GPU certified L is the actual rotated bounding-box side including safety dilation.
-
-## Validation
-
-The existing 45 tests passed before adding host gate tests. The new tests validate seed generation, invalid/NaN/duplicate rejection, and certification of all saved GPU candidates.
-
-selftest checks 250,000 GPU SAT pair depths against an independent float64 CPU oracle and 5,000 grid-neighbor energies against CUDA all-pairs energies, including cell-boundary and touching fixtures. Observed maximum absolute errors were 2.30535e-7 and 2.38419e-7 respectively. These are numerical checks, not certification tolerances.
-
-CUDA compute-sanitizer memcheck passed on n=17, 16 chains, 20 epochs, 32 steps with zero errors. Racecheck passed on n=17, 8 chains, 4 epochs, 8 steps with zero hazards/errors/warnings.
-
-~~~sh
-compute-sanitizer --tool memcheck --error-exitcode 3 \
-  ./cuda/packing outputs/cuda/seed17.txt 20 32 16 42 outputs/cuda/memcheck.json
-compute-sanitizer --tool racecheck --error-exitcode 3 \
-  ./cuda/packing outputs/cuda/seed17.txt 4 8 8 42 outputs/cuda/racecheck.json
-~~~
-
-## Limits and next experiments
-
-This implementation favors transparent correctness over maximum throughput. The 16x16 direct grid, n<=50 storage, conservative proposal exclusion, repeated all-chain reseeding, fixed shrink amount and random-walk moves are deliberate POC limits. Longer runs and more chains are not guaranteed to improve results. n=50 stalls at its grid seed. Incremental neighbor maintenance, multiple retained feasible states, adaptive move scales and a GPU/CPU local-polish stage are possible next experiments, not implemented features.
-
-Quality-first continuation
---------------------------
-
-The search remains heuristic. No promise of matching every record is made.
-`polish.py` uses float64 SLSQP with an analytic separating-axis Jacobian,
-then accepts only through the unchanged official interval certifier. Failure to
-converge is not itself acceptance or rejection. Every geometric candidate must
-pass that gate, and its measured dilation is included in the reported side.
-
-On the locally generated CUDA states, polishing reached n=5
-2.707106781357427 and n=10 3.707106781480190. These are within 3e-10 of the
-analytic constructions, not an exact match at all published decimal places.
-The n=11 and n=17 initial quality runs plateaued around 3.88674603 and
-4.70710678. They do not match the current records.
-
-`scheduler.py --initialize --jobs 0` builds credited analytic Göbel staircase
-and 45-degree-strip constructions, plus the existing tilted-five extension.
-No SVG coordinates or published solver output are imported. This is known
-constructive mathematics, not a claim of GPU rediscovery. Göbel attribution and
-formula were checked against David Ellsworth's current successor to Friedman's
-archive at
-https://kingbird.myphotos.cc/packing/squares_in_squares__G%C3%B6bel_strips.html .
-Current target records are at
-https://kingbird.myphotos.cc/packing/squares_in_squares.html .
-In particular n=50 is now 53/7, not the obsolete 7.598 on older mirrors.
-Record matching is compared against the published precision interval, including
-any added numerical safety clearance. No new mathematical record is claimed.
-
-The CUDA executable accepts n=1..1000. n above the small shared-memory limit
-uses global coordinates with pair-parallel single-square proposals; n is not
-limited by a shared-memory coordinate array. Replica exchanges copy coordinates
-in strides. Each proposal reads an immutable snapshot before a single writer
-commits, avoiding concurrent coordinate-update races. Memory is bounded by
-O(chains*n), not O(chains*n*n). This global path is intentionally conservative
-and not a demonstrated speed improvement over the small-n kernel.
-
-Compile-time `PACK_THREADS` supports 32,64,128,256. Runtime `PACK_TMIN`,
-`PACK_TMAX`, `PACK_MOVE`, `PACK_ROTATION`, and `PACK_SHRINK` expose
-temperature/move/shrink controls. The finite chain and epoch counts remain CLI
-arguments. Configurability is not the same as a completed autotuning experiment.
-
-The scheduler persists per-n bests and attempts under an explicit output
-directory. Priority is estimated remaining normalized gain divided by
-sqrt(n)*(1+attempts), with extra focus for the record test cases.
-`--coverage` visits every unvisited nonsquare once before repeats. Perfect
-squares always remain exact decimal grids. A prepared remote `batch.py`
-coverage run is finite, skips completed outputs, then merges back through the
-official gate. A completed valid CSV alone does not mean every n received
-GPU optimization. The report distinguishes attempted coverage from certified
-improvements and uses the actual repository score, sum(L/sqrt(n)-1), smaller
-is better. `--finalize --jobs 0` certifies all requested puzzles and writes
-the merged CSV and score report.
-
-Example local commands, from the repository root with the editable package
-and optimize dependencies installed:
+From the repository root, install and test the host tools with the following commands.
 
 ```sh
-python cuda/polish.py cuda/results/raw5.json cuda/results/raw10.json
-python cuda/scheduler.py --initialize --jobs 0
-python cuda/scheduler.py --coverage --jobs 969 --epochs 8 --steps 16 --chains 64
-python cuda/scheduler.py --finalize --jobs 0
+python -m pip install -e '.[dev,optimize,records]'
+python -m pytest -q
+python -m compileall -q src cuda
+python -m build
 ```
 
-A short coverage pass establishes actual large-n execution, not record-quality
-search. Longer gain-weighted runs and diverse restarts are still required.
+Build on a CUDA-equipped host. The default architecture is the measured RTX 4070 SUPER's sm_89. For RTX PRO 6000 Blackwell use CUDA 12.8+ and sm_120. No fast-math is enabled. Architecture changes require rebuilding, for example with make -B.
 
-The finite tuning matrix is reproducible with
-`python cuda/autotune.py OUTPUT --prepare`. Put its `tune-run.sh` beside
-the three compiled executables (`packing`, `packing128`, `packing256`)
-and `seed11.txt`, then run it once. It executes twelve combinations of
-64/128/256 block threads, 256/1024 chains and two move/temperature settings,
-each with 4,000 epochs and 64 steps. Analyze the resulting JSON files with
-`python cuda/autotune.py OUTPUT/tuning`. Throughput alone is not quality:
-the report retains official-certified decimal extents and ranks polished
-quality before speed. A single matrix is a hardware-specific measurement,
-not a statistically established universal optimum.
+```sh
+make -C cuda ARCH=sm_120
+make -C cuda check ARCH=sm_120
+```
 
-`python cuda/record_report.py outputs/sweep` reports each focus case's
-full official-certified L, the cited published decimal, and their signed
-and absolute differences using 80-digit decimal arithmetic. “Within
-1e-14” means absolute side-length error at most 1e-14. It never means exact
-equality or a new record. Analytic construction safety clearance and
-float-polish dilation are included in the measured bounding side.
+The three device tests independently compare SAT against a float64 oracle, check grid/all-pairs energies and n=1000 strided exchanges, and compare seeded analytic gradients against finite differences. They require an NVIDIA GPU; Python host tests do not. Run compute-sanitizer memcheck and racecheck on a small finite fixture before accepting changed device code.
 
-A complete n=1..1000 submission has 1,000 packings but **500,500 data rows**
-plus a header, one row per unit square. Columns are
-`id,n,square_id,x,y,angle`; global `id` is consecutive from zero,
-`square_id` is local to each packing, centers are `x,y`, and angles
-are radians. Exact decimal strings are preserved. The final report
-separately counts GPU-executed cases and best-packing provenance, since
-running a GPU search does not necessarily beat an analytic or grid seed.
+Both search executables take `seed-file epochs steps chains rng-seed output.json`. Seed text starts with `n L`, then n center-x, center-y, angle triples. Angles are radians. Raw JSON includes n and q triples. Generated outputs are proposals only, never certified geometry.
 
-## Seeded quality research
+```sh
+python cuda/demo.py run --executable ./cuda/packing --epochs 20000 --steps 32 --chains 256
+python cuda/demo.py report --directory cuda/results
+python cuda/scheduler.py --initialize --jobs 0 --directory outputs/research
+python cuda/scheduler.py --coverage --jobs 10 --epochs 8 --steps 16 --chains 64 --directory outputs/research
+python cuda/scheduler.py --finalize --jobs 0 --directory outputs/research
+squares validate outputs/research/submission.csv --require-complete --report outputs/research/validation.json
+```
 
-`seeded.cu` is a separate double-precision quality path, not a new name for
-the throughput-oriented float32 coverage kernel. It accepts current certified
-best centers, maintains eight-replica temperature ladders, reheats every 200
-epochs, adapts proposal scales toward 25% acceptance, and mixes individual,
-row, column, spatial-cluster, orientation-strip and half-plane moves.
-Block-parallel analytic SAT gradients and monotone backtracking resolve
-overlaps on-device after annealing. Common target L makes replica exchange
-well-defined. The maximum n is explicitly 128, not 1,000.
+Use a new research directory rather than overwrite an incumbent. Initialization creates analytic Göbel staircase, tilted-five and strip seeds, plus exact grids. The scheduler persists state.json and best/ and only merges officially certified improvements. --coverage visits unattempted nonsquares; a completed pass does not imply quality gains. batch.py prepare/merge supports finite GPU-only remote batches. autotune.py OUTPUT --prepare generates twelve launch/temperature configurations; analyze raw results with autotune.py OUTPUT/tuning. record_report.py compares certified decimal sides against cited published decimals, not exact algebraic records.
 
-Compile with `nvcc -O3 -arch=sm_89 cuda/seeded.cu -o seeded` and run
-`./seeded seed.txt epochs steps chains random_seed raw.json`.
-Use `SEED_COLLECTIVE=0` and `SEED_POLISH=0` as ablations; configure
-`SEED_TMAX`, `SEED_MOVE`, `SEED_SHRINK` explicitly for recorded experiments.
-`cuda/seeded_test.cu` independently checks the GPU pair energy against a
-projection-radius oracle and checks analytic gradients by finite differences.
-No fast-math approximation is enabled.
+packing.cu uses shared float32 coordinates for small n and global storage for larger n, bounded by O(chains*n). A chain is a block; eight-temperature ladders exchange completed configurations. Conservative independent-set moves use immutable proposal snapshots and barriers. SAT penetration and wall penalties guide the search, with all-pairs checks before checkpoints. PACK_THREADS supports 32,64,128,256; PACK_TMIN, PACK_TMAX, PACK_MOVE, PACK_ROTATION and PACK_SHRINK expose runtime search settings. Its shared-memory grid is a small-n optimization, not a large-n scalable algorithm. The measured quality-ranked n=11 tuning result was 44.233 million chain-steps/s at 64 threads and 1024 chains on a 4070 SUPER. A chain-step is not a full n-square sweep.
 
-`seeded.py` preserves seed source and undilated certified side length,
-ranks record gaps by potential official score decrease, and certifies direct
-GPU coordinates without a CPU optimizer. Record imports cannot earn GPU
-credit merely by replacing an analytic incumbent. Every accepted improvement
-must strictly beat the undilated seed and current certified incumbent.
-The previous 1,000-packing CSV and provenance remain immutable inputs.
+seeded.cu adds adaptive individual/collective moves, reheats, parallel tempering and on-device gradient/backtracking polish in float64. SEED_COLLECTIVE=0 and SEED_POLISH=0 disable components for ablations; SEED_TMAX, SEED_MOVE, SEED_SHRINK and SEED_STRUCTURED configure bounded experiments. seeded.py write_seed preserves source and undilated certified L; certify_raw rejects invalid geometry and only awards GPU credit for strict improvement over both incumbent and source seed. Its rank_targets default remains 128, so pass a larger bound intentionally when researching up to 384. polish.py uses float64 CPU SLSQP with analytic SAT Jacobians; refine.py adds finite CPU basin hopping. CPU-assisted improvements must be labeled as such.
 
-## Published-record imports
+records.py imports linked SVG geometry from https://kingbird.myphotos.cc/packing/squares_in_squares.html using the separately obtained author's parser at https://github.com/Davidebyzero/packing_squares_in_squares__tools . Source URLs, hashes, attribution and parser revision are preserved in local manifests. No third-party parser or original SVGs are redistributed here; public access is not a reuse license. Install the records extra and check competition/source permissions before use. Most catalogue entries are below 325, but some extend higher. Missing targets are unknown, not fabricated grid records.
 
-Install the `records` extra and separately obtain the author's parser from
-https://github.com/Davidebyzero/packing_squares_in_squares__tools .
-`records.py` reads the live catalogue, retains actual linked SVG URLs and
-attributions, and converts geometry without optimization. Float64 SAT and the
-unchanged official interval certifier independently gate each import.
-The source manifest records content hashes, parser commit, source URL,
-certified side, and reuse status. No express license was found on the
-catalogue or parser; do not mistake public access for an open-source license.
-Original SVGs and third-party parser code are not redistributed here.
+Every accepted candidate goes through the unchanged official v20 interval certifier in squares.core.certify. Float64 SAT is a diagnostic, not a substitute. Preliminary 1e-8 classification is not overlap allowance; interval contacts escalate through 50,100,200,500 digits and unresolved cases fail. Any safety dilation contributes to measured L. Perfect-square grids remain exact. Imported records do not earn GPU credit. A complete CSV has 500,500 rows plus header id,n,square_id,x,y,angle, consecutive global IDs, local IDs 0..n-1 and decimal-string coordinates. Lower total sum(L/sqrt(n)-1) is better.
 
-Import gains are not GPU discoveries. GPU credit requires a strict certified
-improvement over BOTH the current incumbent and the undilated published seed.
-Prioritize remaining gaps using the official metric `(L - record_L)/sqrt(n)`,
-not an area difference. Missing catalogue entries above 324 have unknown
-targets, not invented grid records.
-
-`SEED_STRUCTURED=1` enables on-device perturbed published seeds and parametric
-grid-plus-diagonal strips, sampling strip counts, lengths, angles, and offsets.
-It is explicitly bounded to n <= 384. Import and certify first, recompute gaps,
-then allocate a single GPU job only for cases with a positive remaining gap.
+The local current CSV is outputs/records/merged/submission.csv, SHA256 5d321184da9ebf7239acf8701f608694bd0fe3b856c92033652473aa8d3b222f. It is intentionally not bundled in Git. Saved small raw candidates remain under results/ and can be recertified with demo.py report; its regenerated gpu-certified.csv is ignored. No tool automatically submits to Kaggle, rents a GPU or launches an unbounded service.
