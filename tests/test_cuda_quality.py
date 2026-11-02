@@ -77,3 +77,12 @@ def test_provenance_is_partition_execution_independent():
     counts=provenance_counts(state,4)
     assert counts==dict(analytic_best=1,gpu_best=1,baseline_best=1,other_best=1,
                         actual_gpu_cases=2,actual_gpu_runs=3)
+
+def test_record_comparison_uses_decimal_not_rounded_float():
+    from record_report import comparison
+    result=comparison("2.70710678118654752440084436210484903928500664836659",
+                      "2.70710678118654")
+    assert result["within_tolerance"]
+    assert not result["exactly_equal_to_published_decimal"]
+    assert result["signed_difference"].startswith("7.524400")
+    assert not comparison("3.8867460288941977","3.87708359002281")["within_tolerance"]
