@@ -169,3 +169,29 @@ plus a header, one row per unit square. Columns are
 are radians. Exact decimal strings are preserved. The final report
 separately counts GPU-executed cases and best-packing provenance, since
 running a GPU search does not necessarily beat an analytic or grid seed.
+
+## Seeded quality research
+
+`seeded.cu` is a separate double-precision quality path, not a new name for
+the throughput-oriented float32 coverage kernel. It accepts current certified
+best centers, maintains eight-replica temperature ladders, reheats every 200
+epochs, adapts proposal scales toward 25% acceptance, and mixes individual,
+row, column, spatial-cluster, orientation-strip and half-plane moves.
+Block-parallel analytic SAT gradients and monotone backtracking resolve
+overlaps on-device after annealing. Common target L makes replica exchange
+well-defined. The maximum n is explicitly 128, not 1,000.
+
+Compile with `nvcc -O3 -arch=sm_89 cuda/seeded.cu -o seeded` and run
+`./seeded seed.txt epochs steps chains random_seed raw.json`.
+Use `SEED_COLLECTIVE=0` and `SEED_POLISH=0` as ablations; configure
+`SEED_TMAX`, `SEED_MOVE`, `SEED_SHRINK` explicitly for recorded experiments.
+`cuda/seeded_test.cu` independently checks the GPU pair energy against a
+projection-radius oracle and checks analytic gradients by finite differences.
+No fast-math approximation is enabled.
+
+`seeded.py` preserves seed source and undilated certified side length,
+ranks record gaps by potential official score decrease, and certifies direct
+GPU coordinates without a CPU optimizer. Record imports cannot earn GPU
+credit merely by replacing an analytic incumbent. Every accepted improvement
+must strictly beat the undilated seed and current certified incumbent.
+The previous 1,000-packing CSV and provenance remain immutable inputs.
