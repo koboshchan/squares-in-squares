@@ -37,3 +37,11 @@ def test_priority_and_atomic_state(tmp_path):
     p=tmp_path/"state.json";atomic_json(p,{"attempts":1})
     assert p.read_text().endswith("\n")
     assert not p.with_suffix(".tmp").exists()
+
+@pytest.mark.parametrize("a,count",[(1,5),(2,10),(4,27),(5,38)])
+def test_goebel_analytic_record_family(a,count):
+    from scheduler import goebel
+    rows=goebel(a)
+    assert len(rows)==count
+    target=a+1+1/2**.5
+    assert abs(float(certify(count,rows))-target)<1e-14
