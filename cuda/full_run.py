@@ -82,7 +82,7 @@ def main():
     p.add_argument("--use-families",action="store_true",default=True)
     p.add_argument("--no-families",action="store_false",dest="use_families")
     p.add_argument("--batch-size",type=int,default=1,help="Multi-n batch size for Ask #4 (1 = single-n)")
-    p.add_argument("--solver",choices=["packing","seeded"],default="packing")
+    p.add_argument("--solver",choices=["packing","seeded","langevin"],default="packing")
     a=p.parse_args();d=a.directory;d.mkdir(parents=True,exist_ok=True)
     exe=Path(f"cuda/{a.solver}").resolve();cert=Path("cuda/certifier").resolve()
     statefile=d/"state.json"

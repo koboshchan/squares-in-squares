@@ -5,6 +5,11 @@
 #include <cmath>
 #include <vector>
 
+#if !defined(__CUDACC__) && !defined(__host__) && !defined(__device__)
+#define __host__
+#define __device__
+#endif
+
 namespace sqfam {
 
 struct Sq {
@@ -13,6 +18,13 @@ struct Sq {
 
 struct Grad {
     double x, y, a;
+};
+
+struct WallForce {
+    double fx;
+    double fy;
+    double torque;
+    double e;
 };
 
 enum FamilyId {
@@ -37,32 +49,32 @@ inline const char* family_name(int id) {
 
 constexpr double PI2 = 1.57079632679489661923;
 
-inline double wrap_pi2(double a) {
+__host__ __device__ inline double wrap_pi2(double a) {
     constexpr double pi2 = 1.57079632679489661923;
     a = fmod(a, pi2);
     if (a < 0.0) a += pi2;
     return a;
 }
 
-inline double wrap_angle(double a) {
+__host__ __device__ inline double wrap_angle(double a) {
     return wrap_pi2(a);
 }
 
-inline double sg_smooth_cpu(double x, double eps = 1e-6) {
+__host__ __device__ inline double sg_smooth_cpu(double x, double eps = 1e-6) {
     if (fabs(x) >= eps) return (x > 0.0) - (x < 0.0);
     double u = x / eps;
     return u * (1.5 - 0.5 * u * u);
 }
 
-inline double dr_smooth_cpu(double c, double s) {
+__host__ __device__ inline double dr_smooth_cpu(double c, double s) {
     return 0.5 * (-sg_smooth_cpu(c) * s + sg_smooth_cpu(s) * c);
 }
 
-inline double sg_smooth(double x, double eps = 1e-6) {
+__host__ __device__ inline double sg_smooth(double x, double eps = 1e-6) {
     return sg_smooth_cpu(x, eps);
 }
 
-inline double dr_smooth(double c, double s) {
+__host__ __device__ inline double dr_smooth(double c, double s) {
     return dr_smooth_cpu(c, s);
 }
 
@@ -108,8 +120,102 @@ inline double pair_smooth_grad_cpu(
     if (gap >= 0.0) return 0.0;
     double f = 2.0 * gap;
     gp.x += f * gx; gp.y += f * gy; gp.a += f * gpa;
-    gq.x -= f * gx; gq.y -= f * gy; gq.a += f * gqa;
+    gq.x -= f * gx; gq.y -= f * gy; gq.a -= f * gqa;
     return gap * gap;
+}
+
+__host__ __device__ inline WallForce compute_wall_4vertex(double x, double y, double a, double s) {
+    WallForce wf = {0.0, 0.0, 0.0, 0.0};
+    double ca = cos(a);
+    double sa = sin(a);
+    const double local_offsets[4][2] = {
+        {-0.5, -0.5},
+        { 0.5, -0.5},
+        { 0.5,  0.5},
+        {-0.5,  0.5}
+    };
+    for (int k = 0; k < 4; ++k) {
+        double lx = local_offsets[k][0];
+        double ly = local_offsets[k][1];
+        double rx = lx * ca - ly * sa;
+        double ry = lx * sa + ly * ca;
+        double vx = x + rx;
+        double vy = y + ry;
+
+        double fvx = 0.0;
+        double fvy = 0.0;
+
+        if (vx < 0.0) {
+            double d = -vx;
+            wf.e += d * d;
+            fvx += d;
+        } else if (vx > s) {
+            double d = vx - s;
+            wf.e += d * d;
+            fvx -= d;
+        }
+
+        if (vy < 0.0) {
+            double d = -vy;
+            wf.e += d * d;
+            fvy += d;
+        } else if (vy > s) {
+            double d = vy - s;
+            wf.e += d * d;
+            fvy -= d;
+        }
+
+        wf.fx += fvx;
+        wf.fy += fvy;
+        wf.torque += rx * fvy - ry * fvx;
+    }
+    return wf;
+}
+
+__host__ __device__ inline void sat_contact_force_torque(
+    double px, double py, double pa,
+    double qx, double qy, double qa,
+    double* fx, double* fy, double* torque
+) {
+    if (fx) *fx = 0.0;
+    if (fy) *fy = 0.0;
+    if (torque) *torque = 0.0;
+
+    double dx = qx - px;
+    double dy = qy - py;
+    if (dx * dx + dy * dy >= 2.000001) return;
+
+    double c = cos(pa), s = sin(pa);
+    double d = cos(qa), t = sin(qa);
+    double cd = c * d + s * t;
+    double sd = s * d - c * t;
+    double radius = 0.5 + 0.5 * (fabs(cd) + fabs(sd));
+    double deriv = 0.5 * (-sg_smooth_cpu(cd) * sd + sg_smooth_cpu(sd) * cd);
+    double ux[4] = {c, -s, d, -t};
+    double uy[4] = {s, c, t, d};
+
+    double gap = -1e100;
+    double gx = 0.0, gy = 0.0, gpa = 0.0;
+
+    for (int k = 0; k < 4; ++k) {
+        double v = dx * ux[k] + dy * uy[k];
+        double z = fabs(v) - radius;
+        if (z > gap) {
+            gap = z;
+            double sv = (v >= 0.0) ? 1.0 : -1.0;
+            gx = -sv * ux[k];
+            gy = -sv * uy[k];
+            double cross = sv * (-dx * uy[k] + dy * ux[k]);
+            gpa = -deriv + (k < 2 ? cross : 0.0);
+        }
+    }
+
+    if (gap >= 0.0) return;
+
+    double pen = -gap;
+    if (fx) *fx = pen * gx;
+    if (fy) *fy = pen * gy;
+    if (torque) *torque = pen * gpa;
 }
 
 inline double certified_side_cpu(

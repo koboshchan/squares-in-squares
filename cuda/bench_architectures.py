@@ -509,7 +509,7 @@ def main() -> None:
     )
     p.add_argument(
         "--solver",
-        choices=["packing", "seeded", "both"],
+        choices=["packing", "seeded", "langevin", "all", "both"],
         default="both",
         help="CUDA solver to benchmark",
     )
@@ -597,7 +597,12 @@ def main() -> None:
         architectures = [args.arch]
 
     # Determine solvers
-    solvers = ["packing", "seeded"] if args.solver == "both" else [args.solver]
+    if args.solver == "all":
+        solvers = ["packing", "seeded", "langevin"]
+    elif args.solver == "both":
+        solvers = ["packing", "seeded"]
+    else:
+        solvers = [args.solver]
 
     # Parse sizes and chains
     sizes = [int(x.strip()) for x in args.sizes.split(",") if x.strip()]
