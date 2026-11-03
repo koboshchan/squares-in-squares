@@ -80,8 +80,8 @@ def priority(n, side, attempts):
 def run_gpu(executable,n,rows,directory,epochs,steps,chains,seed):
     side=float(certify(n,rows))
     seedfile=directory/f"seed{n}.txt"; output=directory/f"raw{n}.json"
-    seedfile.write_text(f"{n} {side*1.00002:.12g}\n"+"".join(
-        " ".join(format(float(r[k])*(1.00002 if k!="angle" else 1),".12g")
+    seedfile.write_text(f"{n} {side*1.00000002:.17g}\n"+"".join(
+        " ".join(format(float(r[k])*(1.00000002 if k!="angle" else 1),".17g")
                  for k in ("x","y","angle"))+"\n" for r in rows))
     subprocess.run([executable,str(seedfile),str(epochs),str(steps),
                     str(chains),str(seed),str(output)],check=True,timeout=180)

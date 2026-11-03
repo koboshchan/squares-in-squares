@@ -27,7 +27,7 @@ struct G { double x, y, a; };
 
 __host__ __device__ inline double sg(double x) { return (x > 0) - (x < 0); }
 __host__ __device__ inline double sg_smooth(double x, double eps = 1e-6) {
-    return (fabs(x) > eps) ? ((x >= 0.0) ? 1.0 : -1.0) : 0.0;
+    return x / sqrt(x * x + eps * eps);
 }
 __host__ __device__ inline double wrap_angle(double a) {
     constexpr double pi2 = 1.57079632679489661923;
@@ -35,8 +35,16 @@ __host__ __device__ inline double wrap_angle(double a) {
     if (a < 0.0) a += pi2;
     return a;
 }
-__host__ __device__ inline double rad(double x) { return .5 * (fabs(cos(x)) + fabs(sin(x))); }
-__host__ __device__ inline double dr(double x) { return .5 * (-sg(cos(x)) * sin(x) + sg(sin(x)) * cos(x)); }
+__host__ __device__ inline double rad(double x) {
+    double s, c;
+    sincos(x, &s, &c);
+    return .5 * (fabs(c) + fabs(s));
+}
+__host__ __device__ inline double dr(double x) {
+    double s, c;
+    sincos(x, &s, &c);
+    return .5 * (-sg(c) * s + sg(s) * c);
+}
 __host__ __device__ inline double dr_smooth(double c, double s) {
     return .5 * (-sg_smooth(c) * s + sg_smooth(s) * c);
 }
@@ -117,36 +125,84 @@ __host__ __device__ double boundary(P p, double L, G* g = nullptr) {
 }
 
 __device__ double block_sum(double val, double* tmp) {
-    int t = threadIdx.x;
-    tmp[t] = val;
-    __syncthreads();
-    for (int s = NT / 2; s > 0; s >>= 1) {
-        if (t < s) tmp[t] += tmp[t + s];
-        __syncthreads();
+    #pragma unroll
+    for (int offset = 16; offset > 0; offset >>= 1) {
+        val += __shfl_down_sync(0xffffffff, val, offset);
     }
-    return tmp[0];
+    if (NT <= 32) {
+        val = __shfl_sync(0xffffffff, val, 0);
+        if (threadIdx.x == 0) tmp[0] = val;
+        return val;
+    } else {
+        int lane = threadIdx.x & 31;
+        int wid = threadIdx.x >> 5;
+        if (lane == 0) tmp[wid] = val;
+        __syncthreads();
+        if (wid == 0) {
+            val = (lane < (NT / 32)) ? tmp[lane] : 0.0;
+            #pragma unroll
+            for (int offset = 16; offset > 0; offset >>= 1) {
+                val += __shfl_down_sync(0xffffffff, val, offset);
+            }
+            if (lane == 0) tmp[0] = val;
+        }
+        __syncthreads();
+        return tmp[0];
+    }
 }
 
 __device__ double block_max(double val, double* tmp) {
-    int t = threadIdx.x;
-    tmp[t] = val;
-    __syncthreads();
-    for (int s = NT / 2; s > 0; s >>= 1) {
-        if (t < s && tmp[t + s] > tmp[t]) tmp[t] = tmp[t + s];
-        __syncthreads();
+    #pragma unroll
+    for (int offset = 16; offset > 0; offset >>= 1) {
+        val = fmax(val, __shfl_down_sync(0xffffffff, val, offset));
     }
-    return tmp[0];
+    if (NT <= 32) {
+        val = __shfl_sync(0xffffffff, val, 0);
+        if (threadIdx.x == 0) tmp[0] = val;
+        return val;
+    } else {
+        int lane = threadIdx.x & 31;
+        int wid = threadIdx.x >> 5;
+        if (lane == 0) tmp[wid] = val;
+        __syncthreads();
+        if (wid == 0) {
+            val = (lane < (NT / 32)) ? tmp[lane] : tmp[0];
+            #pragma unroll
+            for (int offset = 16; offset > 0; offset >>= 1) {
+                val = fmax(val, __shfl_down_sync(0xffffffff, val, offset));
+            }
+            if (lane == 0) tmp[0] = val;
+        }
+        __syncthreads();
+        return tmp[0];
+    }
 }
 
 __device__ double block_min(double val, double* tmp) {
-    int t = threadIdx.x;
-    tmp[t] = val;
-    __syncthreads();
-    for (int s = NT / 2; s > 0; s >>= 1) {
-        if (t < s && tmp[t + s] < tmp[t]) tmp[t] = tmp[t + s];
-        __syncthreads();
+    #pragma unroll
+    for (int offset = 16; offset > 0; offset >>= 1) {
+        val = fmin(val, __shfl_down_sync(0xffffffff, val, offset));
     }
-    return tmp[0];
+    if (NT <= 32) {
+        val = __shfl_sync(0xffffffff, val, 0);
+        if (threadIdx.x == 0) tmp[0] = val;
+        return val;
+    } else {
+        int lane = threadIdx.x & 31;
+        int wid = threadIdx.x >> 5;
+        if (lane == 0) tmp[wid] = val;
+        __syncthreads();
+        if (wid == 0) {
+            val = (lane < (NT / 32)) ? tmp[lane] : tmp[0];
+            #pragma unroll
+            for (int offset = 16; offset > 0; offset >>= 1) {
+                val = fmin(val, __shfl_down_sync(0xffffffff, val, offset));
+            }
+            if (lane == 0) tmp[0] = val;
+        }
+        __syncthreads();
+        return tmp[0];
+    }
 }
 
 __device__ double total_cached(const P* q, int n, double L, const double* c, const double* s, double* tmp) {
@@ -169,8 +225,7 @@ __device__ double total(P* q, int n, double L, double* tmp) {
     int t = threadIdx.x;
     __shared__ double c[MAXN], s[MAXN];
     for (int i = t; i < n; i += NT) {
-        c[i] = cos(q[i].a);
-        s[i] = sin(q[i].a);
+        sincos(q[i].a, &s[i], &c[i]);
     }
     __syncthreads();
     return total_cached(q, n, L, c, s, tmp);
@@ -285,14 +340,30 @@ __device__ __forceinline__ float pair_cached_f32(P32 a, P32 b, float ca, float s
 }
 
 __device__ __forceinline__ float block_sum_f32(float v, float* s) {
-    int t = threadIdx.x;
-    s[t] = v;
-    __syncthreads();
-    for (int k = NT / 2; k > 0; k >>= 1) {
-        if (t < k) s[t] += s[t + k];
-        __syncthreads();
+    #pragma unroll
+    for (int offset = 16; offset > 0; offset >>= 1) {
+        v += __shfl_down_sync(0xffffffff, v, offset);
     }
-    return s[0];
+    if (NT <= 32) {
+        v = __shfl_sync(0xffffffff, v, 0);
+        if (threadIdx.x == 0) s[0] = v;
+        return v;
+    } else {
+        int lane = threadIdx.x & 31;
+        int wid = threadIdx.x / 32;
+        if (lane == 0) s[wid] = v;
+        __syncthreads();
+        if (wid == 0) {
+            v = (lane < (NT / 32)) ? s[lane] : 0.0f;
+            #pragma unroll
+            for (int offset = 16; offset > 0; offset >>= 1) {
+                v += __shfl_down_sync(0xffffffff, v, offset);
+            }
+            if (lane == 0) s[0] = v;
+        }
+        __syncthreads();
+        return s[0];
+    }
 }
 
 __device__ __forceinline__ float total_cached_f32(const P32* q, int n, float L, const float* c, const float* s, float* tmp) {
@@ -427,8 +498,7 @@ __global__ void search_kernel(
 
     for (int i = t; i < n; i += NT) {
         q[i] = all[data_idx + i];
-        cachedc[i] = cos(q[i].a);
-        cacheds[i] = sin(q[i].a);
+        sincos(q[i].a, &cacheds[i], &cachedc[i]);
     }
     if (t == 0) {
         r = rng[b];
@@ -689,8 +759,7 @@ __global__ void search_kernel(
             int i = t + k * NT;
             if (i < n) {
                 q[i] = {(double)my_p32[k].x, (double)my_p32[k].y, wrap_angle((double)my_p32[k].a)};
-                cachedc[i] = cos(q[i].a);
-                cacheds[i] = sin(q[i].a);
+                sincos(q[i].a, &cacheds[i], &cachedc[i]);
             }
         }
         __syncthreads();
@@ -728,7 +797,8 @@ __global__ void search_kernel(
             __syncthreads();
 
             if (mode == 0) {
-                double pc = cos(prop_chosen.a), ps = sin(prop_chosen.a);
+                double ps, pc;
+                sincos(prop_chosen.a, &ps, &pc);
                 double oc = cachedc[chosen], os = cacheds[chosen];
                 double delta = (t == 0) ? (boundary(prop_chosen, targetL) - boundary(old_chosen, targetL)) : 0.0;
                 for (int i = t; i < n; i += NT) {
@@ -766,7 +836,8 @@ __global__ void search_kernel(
                                               (z.a > 0.04 && z.a < 1.53);
                     if (take) {
                         if (mode == 3 || mode == 4) {
-                            double c = cos(theta), s = sin(theta);
+                            double s, c;
+                            sincos(theta, &s, &c);
                             z.x = cx + c * dx - s * dy + move;
                             z.y = cy + s * dx + c * dy + rot;
                             z.a = wrap_angle(z.a + theta);
@@ -784,8 +855,7 @@ __global__ void search_kernel(
                         z.y = fmin(targetL - 0.45, fmax(0.45, z.y));
                     }
                     my_p[k] = z;
-                    my_c[k] = cos(z.a);
-                    my_s[k] = sin(z.a);
+                    sincos(z.a, &my_s[k], &my_c[k]);
                 }
                 for (int k = 0; k < KPT; ++k) {
                     int i = t + k * NT;
@@ -891,8 +961,7 @@ __global__ void search_kernel(
                     wrap_angle(my_saved[k].a + alpha * my_d[k].a)
                 };
                 q[i] = z;
-                cachedc[i] = cos(z.a);
-                cacheds[i] = sin(z.a);
+                sincos(z.a, &cacheds[i], &cachedc[i]);
             }
             __syncthreads();
             double ne = total_cached(q, n, targetL, cachedc, cacheds, tmp);
@@ -912,8 +981,7 @@ __global__ void search_kernel(
                 int i = t + k * NT;
                 if (i < n) {
                     q[i] = my_saved[k];
-                    cachedc[i] = cos(my_saved[k].a);
-                    cacheds[i] = sin(my_saved[k].a);
+                    sincos(my_saved[k].a, &cacheds[i], &cachedc[i]);
                     my_d[k] = {0.0, 0.0, 0.0};
                 }
             }
@@ -1029,7 +1097,12 @@ __global__ void swap_replicas(
         double cool = pow(.002, double(epoch % 200) / 199.0);
         double ta = 1e-11 * pow(tmax / 1e-11, (local_a % 8) / 7.0) * cool;
         double tb = 1e-11 * pow(tmax / 1e-11, (local_b % 8) / 7.0) * cool;
-        take = log(curand_uniform_double(&r)) < (1.0 / ta - 1.0 / tb) * (e[a] - e[b]);
+        double dbeta = 1.0 / ta - 1.0 / tb;
+        double de = e[a] - e[b];
+        double arg = dbeta * de;
+        if (arg > 0.0) take = 1;
+        else if (arg < -50.0) take = 0;
+        else take = log(curand_uniform_double(&r)) < arg;
         rng[a] = r;
         atomicAdd(stats + 3, 1ULL);
         if (take) {

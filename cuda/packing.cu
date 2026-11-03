@@ -27,16 +27,25 @@ __device__ int cell(Q p) {
  return y*16+x;
 }
 __device__ float depth(Q p,Q q) {
- float c=cosf(p.a),s=sinf(p.a),d=cosf(q.a),t=sinf(q.a);
- float ux[4]={c,-s,d,-t},uy[4]={s,c,t,d}, z=1e10f;
- for(int k=0;k<4;k++){
- float r=.5f*(fabsf(ux[k]*c+uy[k]*s)+fabsf(-ux[k]*s+uy[k]*c)
-                  +fabsf(ux[k]*d+uy[k]*t)+fabsf(-ux[k]*t+uy[k]*d));
- z=fminf(z,r-fabsf((p.x-q.x)*ux[k]+(p.y-q.y)*uy[k]));
- } return fmaxf(0,z);
+ float dx = p.x - q.x, dy = p.y - q.y;
+ if (dx * dx + dy * dy >= 2.000001f) return 0.0f;
+ float s, c, t, d;
+ sincosf(p.a, &s, &c);
+ sincosf(q.a, &t, &d);
+ float cd = c * d + s * t, sd = s * d - c * t;
+ float radius = 0.5f * (1.0f + fabsf(cd) + fabsf(sd));
+ float ux[4] = {c, -s, d, -t}, uy[4] = {s, c, t, d};
+ float z = 1e10f;
+ for (int k = 0; k < 4; k++) {
+  float v = dx * ux[k] + dy * uy[k];
+  z = fminf(z, radius - fabsf(v));
+ }
+ return fmaxf(0.0f, z);
 }
 __device__ float wall(Q p,float L) {
- float e=.5f*(fabsf(cosf(p.a))+fabsf(sinf(p.a)));
+ float s, c;
+ sincosf(p.a, &s, &c);
+ float e = 0.5f * (fabsf(c) + fabsf(s));
  float x=fmaxf(0,fabsf(p.x-L/2)+e-L/2), y=fmaxf(0,fabsf(p.y-L/2)+e-L/2);
  return x*x+y*y;
 }
@@ -121,9 +130,23 @@ __global__ void walk_global(Q* all,float* energies,curandStatePhilox4_32_10_t* r
    if(dx*dx+dy*dy>9)continue;
    float a=depth(proposal,q[j]),c=depth(oldp,q[j]);delta+=a*a-c*c;
   }
-  partial[t]=delta;__syncthreads();
-  for(int stride=NT/2;stride;stride/=2){if(t<stride)partial[t]+=partial[t+stride];__syncthreads();}
-  if(t==0){accept=partial[0]<=0||curand_uniform(&r)<expf(-partial[0]/temp);}
+  #pragma unroll
+  for(int offset=16;offset>0;offset>>=1){
+   delta+=__shfl_down_sync(0xffffffff,delta,offset);
+  }
+  if(NT>32){
+   int lane=t&31, wid=t>>5;
+   if(lane==0)partial[wid]=delta;
+   __syncthreads();
+   if(wid==0){
+    delta=(lane<(NT/32))?partial[lane]:0.0f;
+    #pragma unroll
+    for(int offset=16;offset>0;offset>>=1){
+     delta+=__shfl_down_sync(0xffffffff,delta,offset);
+    }
+   }
+  }
+  if(t==0){accept=delta<=0||curand_uniform(&r)<expf(-delta/temp);}
   __syncthreads();
   if(t==0&&accept)q[chosen]=proposal;
   __syncthreads();
@@ -136,9 +159,23 @@ __global__ void walk_global(Q* all,float* energies,curandStatePhilox4_32_10_t* r
    if(dx*dx+dy*dy<=2.000001f){float a=depth(q[i],q[j]);e+=a*a;}
   }
  }
- partial[t]=e;__syncthreads();
- for(int stride=NT/2;stride;stride/=2){if(t<stride)partial[t]+=partial[t+stride];__syncthreads();}
- if(t==0){energies[b]=partial[0];atomicAdd(counts,(unsigned long long)steps);}
+ #pragma unroll
+ for(int offset=16;offset>0;offset>>=1){
+  e+=__shfl_down_sync(0xffffffff,e,offset);
+ }
+ if(NT>32){
+  int lane=t&31, wid=t>>5;
+  if(lane==0)partial[wid]=e;
+  __syncthreads();
+  if(wid==0){
+   e=(lane<(NT/32))?partial[lane]:0.0f;
+   #pragma unroll
+   for(int offset=16;offset>0;offset>>=1){
+    e+=__shfl_down_sync(0xffffffff,e,offset);
+   }
+  }
+ }
+ if(t==0){energies[b]=e;atomicAdd(counts,(unsigned long long)steps);}
  rng[b*NT+t]=r;
 }
 __global__ void exchange(Q* q,float* e,curandStatePhilox4_32_10_t* rng,int n,int chains,int parity,float cooling){
@@ -165,7 +202,7 @@ struct G { double x, y, a; };
 
 __host__ __device__ inline double sg(double x) { return (x > 0) - (x < 0); }
 __host__ __device__ inline double sg_smooth(double x, double eps = 1e-6) {
-    return (fabs(x) > eps) ? ((x >= 0.0) ? 1.0 : -1.0) : 0.0;
+    return x / sqrt(x * x + eps * eps);
 }
 __host__ __device__ inline double wrap_angle(double a) {
     constexpr double pi2 = 1.57079632679489661923;
@@ -225,19 +262,82 @@ __host__ __device__ double boundary(P p, double L) {
 }
 
 __device__ double block_sum(double val, double* tmp) {
-    int t = threadIdx.x; tmp[t] = val; __syncthreads();
-    for (int s = NT / 2; s > 0; s >>= 1) { if (t < s) tmp[t] += tmp[t + s]; __syncthreads(); }
-    return tmp[0];
+    #pragma unroll
+    for (int offset = 16; offset > 0; offset >>= 1) {
+        val += __shfl_down_sync(0xffffffff, val, offset);
+    }
+    if (NT <= 32) {
+        val = __shfl_sync(0xffffffff, val, 0);
+        if (threadIdx.x == 0) tmp[0] = val;
+        return val;
+    } else {
+        int lane = threadIdx.x & 31;
+        int wid = threadIdx.x >> 5;
+        if (lane == 0) tmp[wid] = val;
+        __syncthreads();
+        if (wid == 0) {
+            val = (lane < (NT / 32)) ? tmp[lane] : 0.0;
+            #pragma unroll
+            for (int offset = 16; offset > 0; offset >>= 1) {
+                val += __shfl_down_sync(0xffffffff, val, offset);
+            }
+            if (lane == 0) tmp[0] = val;
+        }
+        __syncthreads();
+        return tmp[0];
+    }
 }
 __device__ double block_max(double val, double* tmp) {
-    int t = threadIdx.x; tmp[t] = val; __syncthreads();
-    for (int s = NT / 2; s > 0; s >>= 1) { if (t < s && tmp[t + s] > tmp[t]) tmp[t] = tmp[t + s]; __syncthreads(); }
-    return tmp[0];
+    #pragma unroll
+    for (int offset = 16; offset > 0; offset >>= 1) {
+        val = fmax(val, __shfl_down_sync(0xffffffff, val, offset));
+    }
+    if (NT <= 32) {
+        val = __shfl_sync(0xffffffff, val, 0);
+        if (threadIdx.x == 0) tmp[0] = val;
+        return val;
+    } else {
+        int lane = threadIdx.x & 31;
+        int wid = threadIdx.x >> 5;
+        if (lane == 0) tmp[wid] = val;
+        __syncthreads();
+        if (wid == 0) {
+            val = (lane < (NT / 32)) ? tmp[lane] : tmp[0];
+            #pragma unroll
+            for (int offset = 16; offset > 0; offset >>= 1) {
+                val = fmax(val, __shfl_down_sync(0xffffffff, val, offset));
+            }
+            if (lane == 0) tmp[0] = val;
+        }
+        __syncthreads();
+        return tmp[0];
+    }
 }
 __device__ double block_min(double val, double* tmp) {
-    int t = threadIdx.x; tmp[t] = val; __syncthreads();
-    for (int s = NT / 2; s > 0; s >>= 1) { if (t < s && tmp[t + s] < tmp[t]) tmp[t] = tmp[t + s]; __syncthreads(); }
-    return tmp[0];
+    #pragma unroll
+    for (int offset = 16; offset > 0; offset >>= 1) {
+        val = fmin(val, __shfl_down_sync(0xffffffff, val, offset));
+    }
+    if (NT <= 32) {
+        val = __shfl_sync(0xffffffff, val, 0);
+        if (threadIdx.x == 0) tmp[0] = val;
+        return val;
+    } else {
+        int lane = threadIdx.x & 31;
+        int wid = threadIdx.x >> 5;
+        if (lane == 0) tmp[wid] = val;
+        __syncthreads();
+        if (wid == 0) {
+            val = (lane < (NT / 32)) ? tmp[lane] : tmp[0];
+            #pragma unroll
+            for (int offset = 16; offset > 0; offset >>= 1) {
+                val = fmin(val, __shfl_down_sync(0xffffffff, val, offset));
+            }
+            if (lane == 0) tmp[0] = val;
+        }
+        __syncthreads();
+        return tmp[0];
+    }
 }
 
 __device__ double total_cached(const P* q, int n, double L, const double* c, const double* s, double* tmp) {
@@ -1015,7 +1115,12 @@ __global__ void swap_replicas(
         double cool = pow(.002, double(epoch % 200) / 199.0);
         double ta = tmin * pow(tmax / tmin, (local_a % 8) / 7.0) * cool;
         double tb = tmin * pow(tmax / tmin, (local_b % 8) / 7.0) * cool;
-        take = log(curand_uniform_double(&r)) < (1.0 / ta - 1.0 / tb) * (e[a] - e[b]);
+        double dbeta = 1.0 / ta - 1.0 / tb;
+        double de = e[a] - e[b];
+        double arg = dbeta * de;
+        if (arg > 0.0) take = 1;
+        else if (arg < -50.0) take = 0;
+        else take = log(curand_uniform_double(&r)) < arg;
         rng[a] = r;
         if (take) { double z = e[a]; e[a] = e[b]; e[b] = z; }
     }
