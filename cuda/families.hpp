@@ -44,7 +44,9 @@ inline double wrap_pi2(double a) {
 }
 
 inline double sg_smooth_cpu(double x, double eps = 1e-6) {
-    return x / std::sqrt(x * x + eps * eps);
+    if (std::fabs(x) >= eps) return (x > 0.0) - (x < 0.0);
+    double u = x / eps;
+    return u * (1.5 - 0.5 * u * u);
 }
 
 inline double dr_smooth_cpu(double c, double s) {

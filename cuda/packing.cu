@@ -27,25 +27,16 @@ __device__ int cell(Q p) {
  return y*16+x;
 }
 __device__ float depth(Q p,Q q) {
- float dx = p.x - q.x, dy = p.y - q.y;
- if (dx * dx + dy * dy >= 2.000001f) return 0.0f;
- float s, c, t, d;
- sincosf(p.a, &s, &c);
- sincosf(q.a, &t, &d);
- float cd = c * d + s * t, sd = s * d - c * t;
- float radius = 0.5f * (1.0f + fabsf(cd) + fabsf(sd));
- float ux[4] = {c, -s, d, -t}, uy[4] = {s, c, t, d};
- float z = 1e10f;
- for (int k = 0; k < 4; k++) {
-  float v = dx * ux[k] + dy * uy[k];
-  z = fminf(z, radius - fabsf(v));
- }
- return fmaxf(0.0f, z);
+ float c=cosf(p.a),s=sinf(p.a),d=cosf(q.a),t=sinf(q.a);
+ float ux[4]={c,-s,d,-t},uy[4]={s,c,t,d}, z=1e10f;
+ for(int k=0;k<4;k++){
+ float r=.5f*(fabsf(ux[k]*c+uy[k]*s)+fabsf(-ux[k]*s+uy[k]*c)
+                  +fabsf(ux[k]*d+uy[k]*t)+fabsf(-ux[k]*t+uy[k]*d));
+ z=fminf(z,r-fabsf((p.x-q.x)*ux[k]+(p.y-q.y)*uy[k]));
+ } return fmaxf(0,z);
 }
 __device__ float wall(Q p,float L) {
- float s, c;
- sincosf(p.a, &s, &c);
- float e = 0.5f * (fabsf(c) + fabsf(s));
+ float e=.5f*(fabsf(cosf(p.a))+fabsf(sinf(p.a)));
  float x=fmaxf(0,fabsf(p.x-L/2)+e-L/2), y=fmaxf(0,fabsf(p.y-L/2)+e-L/2);
  return x*x+y*y;
 }
@@ -202,7 +193,9 @@ struct G { double x, y, a; };
 
 __host__ __device__ inline double sg(double x) { return (x > 0) - (x < 0); }
 __host__ __device__ inline double sg_smooth(double x, double eps = 1e-6) {
-    return x / sqrt(x * x + eps * eps);
+    if (fabs(x) >= eps) return (x > 0.0) - (x < 0.0);
+    double u = x / eps;
+    return u * (1.5 - 0.5 * u * u);
 }
 __host__ __device__ inline double wrap_angle(double a) {
     constexpr double pi2 = 1.57079632679489661923;

@@ -27,7 +27,9 @@ struct G { double x, y, a; };
 
 __host__ __device__ inline double sg(double x) { return (x > 0) - (x < 0); }
 __host__ __device__ inline double sg_smooth(double x, double eps = 1e-6) {
-    return x / sqrt(x * x + eps * eps);
+    if (fabs(x) >= eps) return (x > 0.0) - (x < 0.0);
+    double u = x / eps;
+    return u * (1.5 - 0.5 * u * u);
 }
 __host__ __device__ inline double wrap_angle(double a) {
     constexpr double pi2 = 1.57079632679489661923;
@@ -35,16 +37,8 @@ __host__ __device__ inline double wrap_angle(double a) {
     if (a < 0.0) a += pi2;
     return a;
 }
-__host__ __device__ inline double rad(double x) {
-    double s, c;
-    sincos(x, &s, &c);
-    return .5 * (fabs(c) + fabs(s));
-}
-__host__ __device__ inline double dr(double x) {
-    double s, c;
-    sincos(x, &s, &c);
-    return .5 * (-sg(c) * s + sg(s) * c);
-}
+__host__ __device__ inline double rad(double x) { return .5 * (fabs(cos(x)) + fabs(sin(x))); }
+__host__ __device__ inline double dr(double x) { return .5 * (-sg(cos(x)) * sin(x) + sg(sin(x)) * cos(x)); }
 __host__ __device__ inline double dr_smooth(double c, double s) {
     return .5 * (-sg_smooth(c) * s + sg_smooth(s) * c);
 }
