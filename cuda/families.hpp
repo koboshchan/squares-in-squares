@@ -3,7 +3,6 @@
 #pragma once
 #include <algorithm>
 #include <cmath>
-#include <tuple>
 #include <vector>
 
 namespace sqfam {
@@ -36,15 +35,21 @@ inline const char* family_name(int id) {
     }
 }
 
+constexpr double PI2 = 1.57079632679489661923;
+
 inline double wrap_pi2(double a) {
     constexpr double pi2 = 1.57079632679489661923;
-    a = std::fmod(a, pi2);
+    a = fmod(a, pi2);
     if (a < 0.0) a += pi2;
     return a;
 }
 
+inline double wrap_angle(double a) {
+    return wrap_pi2(a);
+}
+
 inline double sg_smooth_cpu(double x, double eps = 1e-6) {
-    if (std::fabs(x) >= eps) return (x > 0.0) - (x < 0.0);
+    if (fabs(x) >= eps) return (x > 0.0) - (x < 0.0);
     double u = x / eps;
     return u * (1.5 - 0.5 * u * u);
 }
@@ -53,16 +58,24 @@ inline double dr_smooth_cpu(double c, double s) {
     return 0.5 * (-sg_smooth_cpu(c) * s + sg_smooth_cpu(s) * c);
 }
 
+inline double sg_smooth(double x, double eps = 1e-6) {
+    return sg_smooth_cpu(x, eps);
+}
+
+inline double dr_smooth(double c, double s) {
+    return dr_smooth_cpu(c, s);
+}
+
 inline double pair_energy_cpu(const Sq& p, const Sq& q, double c, double s, double d, double t) {
     double dx = q.x - p.x, dy = q.y - p.y;
     if (dx * dx + dy * dy >= 2.000001) return 0.0;
     double cd = c * d + s * t, sd = s * d - c * t;
-    double radius = 0.5 + 0.5 * (std::fabs(cd) + std::fabs(sd));
+    double radius = 0.5 + 0.5 * (fabs(cd) + fabs(sd));
     double ux[4] = {c, -s, d, -t}, uy[4] = {s, c, t, d};
     double gap = -1e100;
     for (int k = 0; k < 4; ++k) {
         double v = dx * ux[k] + dy * uy[k];
-        double z = std::fabs(v) - radius;
+        double z = fabs(v) - radius;
         if (z > gap) gap = z;
     }
     return (gap >= 0.0) ? 0.0 : gap * gap;
@@ -75,13 +88,13 @@ inline double pair_smooth_grad_cpu(
     double dx = q.x - p.x, dy = q.y - p.y;
     if (dx * dx + dy * dy >= 2.000001) return 0.0;
     double cd = c * d + s * t, sd = s * d - c * t;
-    double radius = 0.5 + 0.5 * (std::fabs(cd) + std::fabs(sd));
+    double radius = 0.5 + 0.5 * (fabs(cd) + fabs(sd));
     double deriv = 0.5 * (-sg_smooth_cpu(cd) * sd + sg_smooth_cpu(sd) * cd);
     double ux[4] = {c, -s, d, -t}, uy[4] = {s, c, t, d};
     double gap = -1e100, gx = 0.0, gy = 0.0, gpa = 0.0, gqa = 0.0;
     for (int k = 0; k < 4; ++k) {
         double v = dx * ux[k] + dy * uy[k];
-        double z = std::fabs(v) - radius;
+        double z = fabs(v) - radius;
         if (z > gap) {
             gap = z;
             double sv = (v >= 0.0) ? 1.0 : -1.0;
@@ -136,11 +149,11 @@ inline double certified_side_cpu(
                     double dx = xi - q[j].x, dy = yi - q[j].y;
                     if (dx * dx + dy * dy >= 2.05) continue;
                     double cj = c[j], sj = s[j];
-                    double r = 0.5 + 0.5 * (std::fabs(ci * cj + si * sj) + std::fabs(-si * cj + ci * sj));
-                    double v1 = std::fabs(dx * ci + dy * si);
-                    double v2 = std::fabs(-dx * si + dy * ci);
-                    double v3 = std::fabs(dx * cj + dy * sj);
-                    double v4 = std::fabs(-dx * sj + dy * cj);
+                    double r = 0.5 + 0.5 * (fabs(ci * cj + si * sj) + fabs(-si * cj + ci * sj));
+                    double v1 = fabs(dx * ci + dy * si);
+                    double v2 = fabs(-dx * si + dy * ci);
+                    double v3 = fabs(dx * cj + dy * sj);
+                    double v4 = fabs(-dx * sj + dy * cj);
                     double vmax = std::max(std::max(v1, v2), std::max(v3, v4));
                     double req = (vmax > 1e-12) ? ((r + tau) / vmax) : 1e9;
                     if (req > lam) lam = req;
@@ -152,7 +165,7 @@ inline double certified_side_cpu(
     double min_x = 1e9, max_x = -1e9, min_y = 1e9, max_y = -1e9;
     for (int i = 0; i < n; ++i) {
         double x = q[i].x * lam, y = q[i].y * lam;
-        double r = 0.5 * (std::fabs(c[i]) + std::fabs(s[i]));
+        double r = 0.5 * (fabs(c[i]) + fabs(s[i]));
         if (x - r < min_x) min_x = x - r;
         if (x + r > max_x) max_x = x + r;
         if (y - r < min_y) min_y = y - r;
@@ -202,7 +215,7 @@ inline double polish_and_certify_cpu(
         }
         double e = 0.0;
         for (int i = 0; i < n; ++i) {
-            double r_ext = 0.5 * (std::fabs(c[i]) + std::fabs(s[i]));
+            double r_ext = 0.5 * (fabs(c[i]) + fabs(s[i]));
             double d_r = with_grad ? dr_smooth_cpu(c[i], s[i]) : 0.0;
             if (pts[i].x < r_ext) {
                 double u = r_ext - pts[i].x;
@@ -340,7 +353,8 @@ inline std::vector<Sq> materialize_4corner_bands(
     int n, double L, int w, int a1, int a2, int b1, int b2,
     int cx1, int cy1, int cx2, int cy2, bool per_band_stagger, bool corners_first = true
 ) {
-    const double s2 = std::sqrt(2.0), inv_s2 = 1.0 / s2, eps = 1e-7, pi4 = std::acos(-1.0) * 0.25;
+    constexpr double pi2 = 1.57079632679489661923;
+    const double s2 = std::sqrt(2.0), inv_s2 = 1.0 / s2, eps = 1e-7, pi4 = 0.5 * pi2;
     int lim = (int)std::floor(L - 1.0 - 20 * eps);
     std::vector<Sq> corners, tilted;
     for (int i = 0; i < std::min(lim + 1, a1); ++i)
@@ -432,7 +446,8 @@ inline std::vector<Sq> build_grid_horiz_l_band(int n, int cx, int cy, double L_b
     }
     int rem = n - (int)pts.size();
     if (rem <= 0) return pts;
-    double r_t = 0.5 * (std::fabs(std::cos(theta)) + std::fabs(std::sin(theta)));
+    theta = wrap_pi2(theta);
+    double r_t = 0.5 * (fabs(cos(theta)) + fabs(sin(theta)));
     double lo = r_t + 1e-4, hi = std::max(lo + 0.1, L_box - r_t - 1e-4);
     int n_right = (cx < (int)std::floor(L_box)) ? ((rem + 1) / 2) : 0;
     int n_top = rem - n_right;
@@ -466,9 +481,10 @@ inline std::vector<Sq> build_staggered_frame_lattice(int n, double L_box, double
     }
     int rem = n - (int)pts.size();
     if (rem <= 0) return pts;
+    theta = wrap_pi2(theta);
     int cols = std::max(1, (int)std::ceil(std::sqrt((double)rem)));
     int rows = (rem + cols - 1) / cols;
-    double r_t = 0.5 * (std::fabs(std::cos(theta)) + std::fabs(std::sin(theta)));
+    double r_t = 0.5 * (fabs(cos(theta)) + fabs(sin(theta)));
     double lo = r_t + 0.05, hi = std::max(lo + 0.1, L_box - r_t - 0.05);
     for (int k = 0; k < rem; ++k) {
         int ix = k % cols, iy = k / cols;
@@ -565,7 +581,7 @@ inline void build_portfolio_generic(
                 if (tc.inject >= 1) pts.push_back({0.5 + eps, tc.L - 0.5 - eps, 0.0});
                 if (tc.inject >= 2) pts.push_back({tc.L - 0.5 - eps, 0.5 + eps, 0.0});
                 for (int i = 0; i < n && i < (int)pts.size(); ++i)
-                    h_init[(size_t)b * n + i] = {pts[i].x, pts[i].y, pts[i].a};
+                    h_init[(size_t)b * n + i] = {pts[i].x, pts[i].y, wrap_pi2(pts[i].a)};
             }
         } else if (group <= 4 && !cands.empty()) {
             const auto& tc = cands[ladder % cands.size()];
@@ -577,7 +593,7 @@ inline void build_portfolio_generic(
             if (tc.inject >= 1) pts.push_back({0.5 + eps, tc.L - 0.5 - eps, 0.0});
             if (tc.inject >= 2) pts.push_back({tc.L - 0.5 - eps, 0.5 + eps, 0.0});
             for (int i = 0; i < n && i < (int)pts.size(); ++i)
-                h_init[(size_t)b * n + i] = {pts[i].x, pts[i].y, pts[i].a};
+                h_init[(size_t)b * n + i] = {pts[i].x, pts[i].y, wrap_pi2(pts[i].a)};
         } else if (group == 5 || group == 6) {
             int cx = std::max(1, k_floor - 1 - (ladder % 2));
             int cy = std::max(1, k_floor - 1 - ((ladder / 2) % 2));
@@ -585,14 +601,14 @@ inline void build_portfolio_generic(
             double th = 0.22 + 0.08 * (ladder % 7);
             auto pts = build_grid_horiz_l_band(n, cx, cy, L_box, th, (group == 6 ? 1 : 0) | ((ladder % 3) ? 2 : 0));
             for (int i = 0; i < n && i < (int)pts.size(); ++i)
-                h_init[(size_t)b * n + i] = {pts[i].x, pts[i].y, pts[i].a};
+                h_init[(size_t)b * n + i] = {pts[i].x, pts[i].y, wrap_pi2(pts[i].a)};
         } else {
             double L_box = std::max(std::sqrt((double)n) + 0.05, seed_L - 0.02);
             double th = 0.30 + 0.07 * (ladder % 6);
             double shift = 0.15 + 0.05 * (ladder % 4);
             auto pts = build_staggered_frame_lattice(n, L_box, th, shift, 1 + (ladder % 2));
             for (int i = 0; i < n && i < (int)pts.size(); ++i)
-                h_init[(size_t)b * n + i] = {pts[i].x, pts[i].y, pts[i].a};
+                h_init[(size_t)b * n + i] = {pts[i].x, pts[i].y, wrap_pi2(pts[i].a)};
         }
     }
 }

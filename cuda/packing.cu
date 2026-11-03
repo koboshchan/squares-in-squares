@@ -69,9 +69,13 @@ __global__ void walk(Q* all,float* energies,curandStatePhilox4_32_10_t* rng,
   // so centers >3.3 apart cannot interact before OR after either move.
   if(t<n){
    bool take=true; int rank=(t+offset)%n;
-   for(int j=0;j<n;j++)if(j!=t&&(j+offset)%n<rank){
-    float dx=q[t].x-q[j].x,dy=q[t].y-q[j].y;
-    if(dx*dx+dy*dy<3.3f*3.3f)take=false;
+   int c=cell(q[t]),cx=c%16,cy=c/16;
+   for(int cdy=-2;cdy<=2&&take;cdy++)for(int cdx=-2;cdx<=2&&take;cdx++){
+    int xx=cx+cdx,yy=cy+cdy;if(xx<0||xx>=16||yy<0||yy>=16)continue;
+    for(int j=head[yy*16+xx];j!=-1;j=next[j])if(j!=t&&(j+offset)%n<rank){
+     float dx=q[t].x-q[j].x,dy=q[t].y-q[j].y;
+     if(dx*dx+dy*dy<3.3f*3.3f){take=false;break;}
+    }
    }
    selected[t]=take;
    proposed[t]=q[t];
@@ -118,7 +122,8 @@ __global__ void walk_global(Q* all,float* energies,curandStatePhilox4_32_10_t* r
   float delta=t==0?wall(proposal,L)-wall(oldp,L):0;
   for(int j=t;j<n;j+=NT)if(j!=chosen){
    float dx=q[j].x-oldp.x,dy=q[j].y-oldp.y;
-   if(dx*dx+dy*dy>9)continue;
+   if(fabsf(dx)+fabsf(dy)>4.25f)continue;
+   if(dx*dx+dy*dy>9.0f)continue;
    float a=depth(proposal,q[j]),c=depth(oldp,q[j]);delta+=a*a-c*c;
   }
   #pragma unroll

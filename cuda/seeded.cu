@@ -309,8 +309,8 @@ __device__ __forceinline__ float wrap_angle_f32(float a) {
 }
 
 __device__ __forceinline__ float boundary_f32(P32 p, float L) {
-    float s, c;
-    __sincosf(p.a, &s, &c);
+    float s = sinf(p.a);
+    float c = cosf(p.a);
     float r = 0.5f * (fabsf(c) + fabsf(s));
     float e = 0.0f;
     if (p.x < r) { float u = r - p.x; e += u * u; }
@@ -374,8 +374,16 @@ __device__ __forceinline__ float total_cached_f32(const P32* q, int n, float L, 
     return block_sum_f32(e, tmp);
 }
 
+__device__ __forceinline__ float Hermite(float u, float eps = 1e-5f) {
+    if (fabsf(u) >= eps) return (float)((u > 0.0f) - (u < 0.0f));
+    float t = u * (1.0f / eps);
+    return t * (1.5f - 0.5f * t * t);
+}
+
 __device__ __forceinline__ float sgn_smooth_f32(float u) {
-    return u * rsqrtf(u * u + 1e-12f);
+    if (fabsf(u) >= 1e-5f) return (float)((u > 0.0f) - (u < 0.0f));
+    float t = u * 1e5f;
+    return t * (1.5f - 0.5f * t * t);
 }
 
 __device__ __forceinline__ float dr_smooth_f32(float c, float s) {
@@ -409,7 +417,7 @@ __device__ __forceinline__ void pair_cached_smooth_f32(
     float d2_dx = -s2 * sa, d2_dy = s2 * ca,  d2_da = -s2 * u1;
 
     float diff_a = a1 - a2;
-    float wa = 0.5f * (1.0f + diff_a * rsqrtf(diff_a * diff_a + 1e-10f));
+    float wa = 0.5f * (1.0f + Hermite(diff_a, 1e-5f));
     float dma_dx = wa * d1_dx + (1.0f - wa) * d2_dx;
     float dma_dy = wa * d1_dy + (1.0f - wa) * d2_dy;
     float dma_da = wa * d1_da + (1.0f - wa) * d2_da;
@@ -417,13 +425,13 @@ __device__ __forceinline__ void pair_cached_smooth_f32(
 
     float t1 = sgn_smooth_f32(v1), t2 = sgn_smooth_f32(v2);
     float diff_b = b1 - b2;
-    float wb = 0.5f * (1.0f + diff_b * rsqrtf(diff_b * diff_b + 1e-10f));
+    float wb = 0.5f * (1.0f + Hermite(diff_b, 1e-5f));
     float dmb_dx = wb * (t1 * cb) + (1.0f - wb) * (-t2 * sb);
     float dmb_dy = wb * (t1 * sb) + (1.0f - wb) * (t2 * cb);
     float dpb_dx = -dmb_dx, dpb_dy = -dmb_dy, dpb_da = dr_da;
 
     float diff_p = pen_b - pen_a;
-    float wp = 0.5f * (1.0f + diff_p * rsqrtf(diff_p * diff_p + 1e-10f));
+    float wp = 0.5f * (1.0f + Hermite(diff_p, 1e-5f));
     float p = fminf(pen_a, pen_b);
     float two_p = 2.0f * p;
     ga->x += two_p * (wp * dpa_dx + (1.0f - wp) * dpb_dx);
@@ -525,7 +533,8 @@ __global__ void search_kernel(
             int i = t + k * NT;
             if (i < n) {
                 my_p32[k] = {(float)q[i].x, (float)q[i].y, (float)q[i].a};
-                __sincosf(my_p32[k].a, &my_s32[k], &my_c32[k]);
+                my_s32[k] = sinf(my_p32[k].a);
+                my_c32[k] = cosf(my_p32[k].a);
             }
         }
         __syncthreads();
@@ -568,8 +577,8 @@ __global__ void search_kernel(
             __syncthreads();
 
             if (mode == 0) {
-                float pc, ps;
-                __sincosf(prop_c32.a, &ps, &pc);
+                float ps = sinf(prop_c32.a);
+                float pc = cosf(prop_c32.a);
                 float oc = c32[chosen], os = s32[chosen];
                 float delta = (t == 0) ? (boundary_f32(prop_c32, targetL32) - boundary_f32(old_c32, targetL32)) : 0.0f;
                 for (int i = t; i < n; i += NT) {
@@ -596,8 +605,8 @@ __global__ void search_kernel(
             } else {
                 float cx32 = (float)cx, cy32 = (float)cy;
                 float mv32 = (float)move, rt32 = (float)rot, th32 = (float)theta;
-                float c_th, s_th;
-                __sincosf(th32, &s_th, &c_th);
+                float s_th = sinf(th32);
+                float c_th = cosf(th32);
                 for (int k = 0; k < KPT; ++k) {
                     int i = t + k * NT;
                     if (i >= n) break;
@@ -628,7 +637,8 @@ __global__ void search_kernel(
                         z.y = fminf(targetL32 - 0.45f, fmaxf(0.45f, z.y));
                     }
                     my_p32[k] = z;
-                    __sincosf(z.a, &my_s32[k], &my_c32[k]);
+                    my_s32[k] = sinf(z.a);
+                    my_c32[k] = cosf(z.a);
                 }
                 for (int k = 0; k < KPT; ++k) {
                     int i = t + k * NT;
