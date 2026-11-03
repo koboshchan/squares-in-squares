@@ -5,9 +5,13 @@ DETECTED_CC := $(shell nvidia-smi --query-gpu=compute_cap --format=csv,noheader 
 ARCH ?= $(if $(DETECTED_CC),sm_$(DETECTED_CC),sm_89)
 NVCCFLAGS ?= -O3 -std=c++17
 CXXFLAGS ?= -O3 -std=c++17 -pthread
-PROGRAMS = packing seeded selftest globaltest seeded_test certifier
+PROGRAMS = algos algos_test packing seeded selftest globaltest seeded_test certifier
 .PHONY: all check clean
 all: $(PROGRAMS)
+algos_test: tests/algos_test.cu algos.cu
+	$(NVCC) $(NVCCFLAGS) -arch=$(ARCH) $< -o $@
+algos: algos.cu
+	$(NVCC) $(NVCCFLAGS) -arch=$(ARCH) $< -o $@
 packing: packing.cu
 	$(NVCC) $(NVCCFLAGS) -arch=$(ARCH) $< -o $@
 seeded: seeded.cu
@@ -19,6 +23,7 @@ seeded_test: tests/seeded_test.cu seeded.cu
 certifier: certifier.cpp
 	$(CXX) $(CXXFLAGS) $< -o $@
 check: all
+	./algos_test
 	./selftest
 	./globaltest
 	./seeded_test

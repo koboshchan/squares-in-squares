@@ -20,8 +20,11 @@ def main():
     p=argparse.ArgumentParser();p.add_argument("--directory",type=Path,required=True)
     p.add_argument("--incumbent",type=Path,required=True)
     p.add_argument("--seed",type=int,default=42)
+    p.add_argument("--solver", choices=("packing","algos"), default="packing")
+    p.add_argument("--mode", choices=("1","2","3"), default="1")
     a=p.parse_args();d=a.directory;d.mkdir(parents=True,exist_ok=True)
-    exe=Path("cuda/packing").resolve();cert=Path("cuda/certifier").resolve()
+    os.environ["ALGOS_MODE"]=a.mode
+    exe=Path("cuda")/a.solver;exe=exe.resolve();cert=Path("cuda/certifier").resolve()
     start=time.time();statefile=d/"state.json"
     if statefile.exists(): state=json.loads(statefile.read_text())
     else:

@@ -24,3 +24,7 @@ cuda/globaltest
 cuda/seeded_test
 cuda/certifier
 cuda/results/gpu-certified.csv
+cuda/algos
+cuda/algos_test
+algos-benchmark/
+algos-sweep/

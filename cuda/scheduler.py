@@ -149,7 +149,11 @@ def main():
     p.add_argument("--initialize",action="store_true")
     p.add_argument("--finalize",action="store_true")
     p.add_argument("--coverage",action="store_true",help="one first visit to every nonsquare before repeats")
+    p.add_argument("--solver", choices=("packing","algos"), default="packing")
+    p.add_argument("--mode", choices=("1","2","3"), default="1")
     a=p.parse_args()
+    os.environ["ALGOS_MODE"]=a.mode
+    if a.solver=="algos": a.executable="./cuda/algos"
     if not 1<=a.max_n<=1000 or not 0<=a.jobs<=10000: p.error("out of range")
     d=a.directory;d.mkdir(parents=True,exist_ok=True);(d/"best").mkdir(exist_ok=True)
     statepath=d/"state.json"
